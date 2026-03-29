@@ -15,11 +15,28 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // Profili getir
   const { data } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
+
+  // Profil yoksa otomatik oluştur (trigger çalışmamış olabilir)
+  if (!data) {
+    const role = (user.user_metadata?.role as UserRole) || "user";
+    const { data: newProfile } = await supabase
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        email: user.email!,
+        full_name: user.user_metadata?.full_name || "",
+        role,
+      })
+      .select()
+      .single();
+    return newProfile;
+  }
 
   return data;
 }
