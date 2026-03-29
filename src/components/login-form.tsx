@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Factory, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import Image from "next/image";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
@@ -34,10 +35,14 @@ export default function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary mb-2">
-          <Factory className="h-6 w-6 text-primary-foreground" />
-        </div>
-        <CardTitle className="text-xl">Cerkar Makina</CardTitle>
+        <Image
+          src="/logo.png"
+          alt="Cerkar Makina"
+          width={280}
+          height={70}
+          className="mx-auto mb-2"
+          priority
+        />
         <p className="text-sm text-muted-foreground">
           Üretim Takip Sistemine Giriş
         </p>

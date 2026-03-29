@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import Image from "next/image";
 import {
-  Factory,
   LayoutDashboard,
   PlusCircle,
   Package,
@@ -58,19 +58,23 @@ export default function Sidebar({ userRole, username, userName }: SidebarProps) 
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
-          <Factory className="h-5 w-5 text-primary-foreground" />
-        </div>
-        {!collapsed && (
-          <div className="flex flex-col overflow-hidden">
-            <span className="font-bold text-sm leading-tight tracking-tight text-sidebar-foreground">
-              CERKAR MAKİNA
-            </span>
-            <span className="text-[10px] text-sidebar-foreground/60 leading-tight">
-              Üretim Takip Sistemi
-            </span>
-          </div>
+      <div className="flex items-center justify-center px-2 h-16 border-b border-sidebar-border">
+        {collapsed ? (
+          <Image
+            src="/logo.png"
+            alt="Cerkar Makina"
+            width={36}
+            height={36}
+            className="object-contain"
+          />
+        ) : (
+          <Image
+            src="/logo.png"
+            alt="Cerkar Makina"
+            width={180}
+            height={45}
+            className="object-contain"
+          />
         )}
       </div>
 
