@@ -42,7 +42,7 @@ interface UserManagementProps {
 export default function UserManagement({ profiles, currentUserId }: UserManagementProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<UserRole>("user");
@@ -51,21 +51,21 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    if (!email || !password) {
-      toast.error("E-posta ve şifre zorunludur.");
+    if (!username || !password) {
+      toast.error("Kullanıcı adı ve şifre zorunludur.");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Şifre en az 6 karakter olmalıdır.");
+    if (password.length < 4) {
+      toast.error("Şifre en az 4 karakter olmalıdır.");
       return;
     }
 
     setSaving(true);
     try {
-      await createUser(email, password, fullName, role);
+      await createUser(username, password, fullName, role);
       toast.success("Kullanıcı başarıyla oluşturuldu.");
       setOpen(false);
-      setEmail("");
+      setUsername("");
       setPassword("");
       setFullName("");
       setRole("user");
@@ -137,13 +137,13 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="newEmail">E-posta</Label>
+                <Label htmlFor="newUsername">Kullanıcı Adı</Label>
                 <Input
-                  id="newEmail"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ornek@cerkar.com"
+                  id="newUsername"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="kullanici"
                   required
                 />
               </div>
@@ -154,7 +154,7 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="En az 6 karakter"
+                  placeholder="En az 4 karakter"
                   required
                 />
               </div>
@@ -190,7 +190,7 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
               <TableHeader>
                 <TableRow>
                   <TableHead>Ad Soyad</TableHead>
-                  <TableHead>E-posta</TableHead>
+                  <TableHead>Kullanıcı Adı</TableHead>
                   <TableHead>Yetki</TableHead>
                   <TableHead>Kayıt Tarihi</TableHead>
                   <TableHead className="text-right">İşlemler</TableHead>
@@ -207,7 +207,7 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>{profile.email}</TableCell>
+                    <TableCell>{profile.username}</TableCell>
                     <TableCell>
                       {profile.id === currentUserId ? (
                         <Badge variant={profile.role === "admin" ? "default" : "secondary"}>

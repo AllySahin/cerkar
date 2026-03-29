@@ -32,11 +32,11 @@ const navItems = [
 
 interface SidebarProps {
   userRole: UserRole;
-  userEmail: string;
+  username: string;
   userName: string;
 }
 
-export default function Sidebar({ userRole, userEmail, userName }: SidebarProps) {
+export default function Sidebar({ userRole, username, userName }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -103,7 +103,7 @@ export default function Sidebar({ userRole, userEmail, userName }: SidebarProps)
         {!collapsed && (
           <div className="px-3 py-2">
             <p className="text-xs font-medium text-sidebar-foreground truncate">
-              {userName || userEmail}
+              {userName || username}
             </p>
             <p className="text-[10px] text-sidebar-foreground/50 truncate">
               {isAdmin ? "Admin" : "Kullanıcı"}

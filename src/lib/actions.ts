@@ -3,40 +3,27 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ProductFormEntry, Profile, UserRole } from "@/lib/types";
+import {
+  hashPassword,
+  setSession,
+  getSessionUserId,
+  clearSession,
+} from "@/lib/auth";
 
 // ============================================
 // Yetkilendirme Yardımcıları
 // ============================================
 
 export async function getCurrentProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const userId = await getSessionUserId();
+  if (!userId) return null;
 
-  // Profili getir
+  const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
-
-  // Profil yoksa otomatik oluştur (trigger çalışmamış olabilir)
-  if (!data) {
-    const role = (user.user_metadata?.role as UserRole) || "user";
-    const { data: newProfile } = await supabase
-      .from("profiles")
-      .upsert({
-        id: user.id,
-        email: user.email!,
-        full_name: user.user_metadata?.full_name || "",
-        role,
-      })
-      .select()
-      .single();
-    return newProfile;
-  }
 
   return data;
 }
@@ -54,53 +41,28 @@ async function requireRole(role: UserRole) {
 // Oturum İşlemleri
 // ============================================
 
-export async function signOut() {
+export async function signIn(username: string, password: string) {
   const supabase = await createClient();
-  await supabase.auth.signOut();
-  revalidatePath("/", "layout");
-}
+  const hash = await hashPassword(password);
 
-export async function seedDefaultAdmin() {
-  const supabase = await createClient();
-
-  // Zaten admin profili varsa bir şey yapma
-  const { data: existingAdmin } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
-    .select("id")
-    .eq("role", "admin")
-    .limit(1)
+    .select("*")
+    .eq("username", username)
+    .eq("password_hash", hash)
     .single();
 
-  if (existingAdmin) return { seeded: false };
-
-  // Varsayılan admin kullanıcısını oluştur
-  const { data, error } = await supabase.auth.signUp({
-    email: "admin@cerkar.com",
-    password: "admin123",
-    options: {
-      data: { full_name: "Admin", role: "admin" },
-    },
-  });
-
-  if (error) {
-    // Kullanıcı zaten varsa sorun değil
-    if (error.message.includes("already")) return { seeded: false };
-    return { seeded: false };
+  if (error || !data) {
+    throw new Error("Kullanıcı adı veya şifre hatalı.");
   }
 
-  // Profil trigger ile oluşmadıysa manuel ekle
-  if (data.user) {
-    await supabase
-      .from("profiles")
-      .upsert({
-        id: data.user.id,
-        email: "admin@cerkar.com",
-        full_name: "Admin",
-        role: "admin",
-      });
-  }
+  await setSession(data.id);
+  return data as Profile;
+}
 
-  return { seeded: true };
+export async function signOut() {
+  await clearSession();
+  revalidatePath("/", "layout");
 }
 
 // ============================================
@@ -120,36 +82,35 @@ export async function getProfiles() {
 }
 
 export async function createUser(
-  email: string,
+  username: string,
   password: string,
   fullName: string,
   role: UserRole
 ) {
   await requireRole("admin");
-  const supabase = await createClient();
 
-  // Supabase Auth ile kullanıcı oluştur
-  const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName, role },
+  if (password.length < 4) {
+    throw new Error("Şifre en az 4 karakter olmalıdır.");
+  }
+
+  const supabase = await createClient();
+  const hash = await hashPassword(password);
+
+  const { error } = await supabase.from("profiles").insert({
+    username: username.trim(),
+    password_hash: hash,
+    full_name: fullName.trim(),
+    role,
   });
 
   if (error) {
-    // admin API kullanılamıyorsa signUp ile dene
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, role },
-      },
-    });
-    if (signUpError) throw new Error(signUpError.message);
+    if (error.message.includes("duplicate") || error.message.includes("unique")) {
+      throw new Error("Bu kullanıcı adı zaten mevcut.");
+    }
+    throw new Error(error.message);
   }
 
   revalidatePath("/kullanicilar");
-  return data;
 }
 
 export async function updateUserRole(userId: string, role: UserRole) {
@@ -172,8 +133,6 @@ export async function deleteUser(userId: string) {
   }
 
   const supabase = await createClient();
-
-  // Profili sil (auth.users cascade ile silinmez, profili silmek yeterli)
   const { error } = await supabase.from("profiles").delete().eq("id", userId);
   if (error) throw new Error(error.message);
   revalidatePath("/kullanicilar");

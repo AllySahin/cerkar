@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { seedDefaultAdmin } from "@/lib/actions";
+import { signIn } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,35 +10,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Factory, Loader2 } from "lucide-react";
 
 export default function LoginForm() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    seedDefaultAdmin();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError("E-posta veya şifre hatalı.");
+    try {
+      await signIn(username, password);
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Kullanıcı adı veya şifre hatalı.");
       setLoading(false);
-      return;
     }
-
-    router.push("/dashboard");
-    router.refresh();
   };
 
   return (
@@ -56,13 +45,13 @@ export default function LoginForm() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">E-posta</Label>
+            <Label htmlFor="username">Kullanıcı Adı</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder="ornek@cerkar.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="username"
+              type="text"
+              placeholder="admin"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>

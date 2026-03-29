@@ -10,7 +10,7 @@ export default async function AuthenticatedLayout({
 
   return (
     <div className="flex h-full">
-      <Sidebar userRole={profile?.role ?? "user"} userEmail={profile?.email ?? ""} userName={profile?.full_name ?? ""} />
+      <Sidebar userRole={profile?.role ?? "user"} username={profile?.username ?? ""} userName={profile?.full_name ?? ""} />
       <div className="flex-1 flex flex-col min-h-screen overflow-auto">
         <main className="flex-1 px-6 py-8">{children}</main>
         <footer className="border-t py-3">
