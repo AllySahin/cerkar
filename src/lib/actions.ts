@@ -43,6 +43,49 @@ export async function signOut() {
   revalidatePath("/", "layout");
 }
 
+export async function seedDefaultAdmin() {
+  const supabase = await createClient();
+
+  // Zaten admin profili varsa bir şey yapma
+  const { data: existingAdmin } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "admin")
+    .limit(1)
+    .single();
+
+  if (existingAdmin) return { seeded: false };
+
+  // Varsayılan admin kullanıcısını oluştur
+  const { data, error } = await supabase.auth.signUp({
+    email: "admin@cerkar.com",
+    password: "admin123",
+    options: {
+      data: { full_name: "Admin", role: "admin" },
+    },
+  });
+
+  if (error) {
+    // Kullanıcı zaten varsa sorun değil
+    if (error.message.includes("already")) return { seeded: false };
+    return { seeded: false };
+  }
+
+  // Profil trigger ile oluşmadıysa manuel ekle
+  if (data.user) {
+    await supabase
+      .from("profiles")
+      .upsert({
+        id: data.user.id,
+        email: "admin@cerkar.com",
+        full_name: "Admin",
+        role: "admin",
+      });
+  }
+
+  return { seeded: true };
+}
+
 // ============================================
 // Kullanıcı Yönetimi (Sadece Admin)
 // ============================================
