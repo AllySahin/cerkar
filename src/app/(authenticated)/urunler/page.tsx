@@ -1,4 +1,4 @@
-import { getProducts } from "@/lib/actions";
+import { getProducts, getCurrentProfile } from "@/lib/actions";
 import type { Product } from "@/lib/types";
 import AddProductDialog from "@/components/add-product-dialog";
 import DeleteProductButton from "@/components/delete-product-button";
@@ -8,6 +8,8 @@ import { Package } from "lucide-react";
 export default async function UrunlerPage() {
   let products: Product[] = [];
   let error: string | null = null;
+  const profile = await getCurrentProfile();
+  const isAdmin = profile?.role === "admin";
 
   try {
     products = await getProducts();
@@ -21,10 +23,10 @@ export default async function UrunlerPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Ürünler</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Üretim takibi yapılan ürünleri yönetin.
+            Üretim takibi yapılan ürünleri görüntüleyin.
           </p>
         </div>
-        <AddProductDialog />
+        {isAdmin && <AddProductDialog />}
       </div>
 
       {error ? (
@@ -60,7 +62,7 @@ export default async function UrunlerPage() {
                       Eklenme: {new Date(product.created_at).toLocaleDateString("tr-TR")}
                     </p>
                   </div>
-                  <DeleteProductButton id={product.id} name={product.name} />
+                  {isAdmin && <DeleteProductButton id={product.id} name={product.name} />}
                 </div>
               ))}
             </div>

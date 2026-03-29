@@ -21,12 +21,12 @@ import { signOut } from "@/lib/actions";
 import type { UserRole } from "@/lib/types";
 
 const navItems = [
-  { href: "/uretim", label: "Üretim Girişi", icon: PlusCircle, adminOnly: true },
+  { href: "/uretim", label: "Üretim Girişi", icon: PlusCircle, adminOnly: false },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
   { href: "/gecmis", label: "Geçmiş", icon: History, adminOnly: false },
   { href: "/rapor", label: "Rapor", icon: FileSpreadsheet, adminOnly: false },
-  { href: "/urunler", label: "Ürünler", icon: Package, adminOnly: true },
-  { href: "/makineler", label: "Makineler", icon: Cog, adminOnly: true },
+  { href: "/urunler", label: "Ürünler", icon: Package, adminOnly: false },
+  { href: "/makineler", label: "Makineler", icon: Cog, adminOnly: false },
   { href: "/kullanicilar", label: "Kullanıcılar", icon: Users, adminOnly: true },
 ];
 

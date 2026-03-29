@@ -1,4 +1,4 @@
-import { getMachines } from "@/lib/actions";
+import { getMachines, getCurrentProfile } from "@/lib/actions";
 import type { Machine } from "@/lib/types";
 import AddMachineDialog from "@/components/add-machine-dialog";
 import DeleteMachineButton from "@/components/delete-machine-button";
@@ -8,6 +8,8 @@ import { Cog } from "lucide-react";
 export default async function MakinelerPage() {
   let machines: Machine[] = [];
   let error: string | null = null;
+  const profile = await getCurrentProfile();
+  const isAdmin = profile?.role === "admin";
 
   try {
     machines = await getMachines();
@@ -21,10 +23,10 @@ export default async function MakinelerPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Makineler</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Üretimde kullanılan makineleri yönetin.
+            Üretimde kullanılan makineleri görüntüleyin.
           </p>
         </div>
-        <AddMachineDialog />
+        {isAdmin && <AddMachineDialog />}
       </div>
 
       {error ? (
@@ -60,7 +62,7 @@ export default async function MakinelerPage() {
                       Eklenme: {new Date(machine.created_at).toLocaleDateString("tr-TR")}
                     </p>
                   </div>
-                  <DeleteMachineButton id={machine.id} name={machine.name} />
+                  {isAdmin && <DeleteMachineButton id={machine.id} name={machine.name} />}
                 </div>
               ))}
             </div>
