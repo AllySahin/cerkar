@@ -2,7 +2,122 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ProductFormEntry } from "@/lib/types";
+import type { ProductFormEntry, Profile, UserRole } from "@/lib/types";
+
+// ============================================
+// Yetkilendirme Yardımcıları
+// ============================================
+
+export async function getCurrentProfile(): Promise<Profile | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  return data;
+}
+
+async function requireRole(role: UserRole) {
+  const profile = await getCurrentProfile();
+  if (!profile) throw new Error("Oturum açmanız gerekiyor.");
+  if (role === "admin" && profile.role !== "admin") {
+    throw new Error("Bu işlem için admin yetkisi gerekiyor.");
+  }
+  return profile;
+}
+
+// ============================================
+// Oturum İşlemleri
+// ============================================
+
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+}
+
+// ============================================
+// Kullanıcı Yönetimi (Sadece Admin)
+// ============================================
+
+export async function getProfiles() {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .order("created_at");
+
+  if (error) throw new Error(error.message);
+  return data as Profile[];
+}
+
+export async function createUser(
+  email: string,
+  password: string,
+  fullName: string,
+  role: UserRole
+) {
+  await requireRole("admin");
+  const supabase = await createClient();
+
+  // Supabase Auth ile kullanıcı oluştur
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role },
+  });
+
+  if (error) {
+    // admin API kullanılamıyorsa signUp ile dene
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, role },
+      },
+    });
+    if (signUpError) throw new Error(signUpError.message);
+  }
+
+  revalidatePath("/kullanicilar");
+  return data;
+}
+
+export async function updateUserRole(userId: string, role: UserRole) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ role })
+    .eq("id", userId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/kullanicilar");
+}
+
+export async function deleteUser(userId: string) {
+  await requireRole("admin");
+  const profile = await getCurrentProfile();
+  if (profile!.id === userId) {
+    throw new Error("Kendi hesabınızı silemezsiniz.");
+  }
+
+  const supabase = await createClient();
+
+  // Profili sil (auth.users cascade ile silinmez, profili silmek yeterli)
+  const { error } = await supabase.from("profiles").delete().eq("id", userId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/kullanicilar");
+}
 
 // ============================================
 // Ürün İşlemleri
@@ -20,6 +135,7 @@ export async function getProducts() {
 }
 
 export async function createProduct(name: string) {
+  await requireRole("admin");
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
@@ -33,6 +149,7 @@ export async function createProduct(name: string) {
 }
 
 export async function deleteProduct(id: string) {
+  await requireRole("admin");
   const supabase = await createClient();
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -55,6 +172,7 @@ export async function getMachines() {
 }
 
 export async function createMachine(name: string) {
+  await requireRole("admin");
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("machines")
@@ -68,6 +186,7 @@ export async function createMachine(name: string) {
 }
 
 export async function deleteMachine(id: string) {
+  await requireRole("admin");
   const supabase = await createClient();
   const { error } = await supabase.from("machines").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -82,6 +201,7 @@ export async function saveProductionLogs(
   entries: ProductFormEntry[],
   date: string
 ) {
+  await requireRole("admin");
   const supabase = await createClient();
 
   const rows = entries

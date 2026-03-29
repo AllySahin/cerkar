@@ -2,6 +2,16 @@
 // Cerkar Makina - Tip Tanımları
 // ============================================
 
+export type UserRole = "admin" | "user";
+
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: UserRole;
+  created_at: string;
+}
+
 export interface Product {
   id: string;
   name: string;
