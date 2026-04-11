@@ -2,6 +2,7 @@ import { getProducts, getCurrentProfile } from "@/lib/actions";
 import type { Product } from "@/lib/types";
 import AddProductDialog from "@/components/add-product-dialog";
 import DeleteProductButton from "@/components/delete-product-button";
+import EditProductButton from "@/components/edit-product-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package } from "lucide-react";
 
@@ -62,7 +63,12 @@ export default async function UrunlerPage() {
                       Eklenme: {new Date(product.created_at).toLocaleDateString("tr-TR")}
                     </p>
                   </div>
-                  {isAdmin && <DeleteProductButton id={product.id} name={product.name} />}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
+                      <EditProductButton id={product.id} name={product.name} />
+                      <DeleteProductButton id={product.id} name={product.name} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

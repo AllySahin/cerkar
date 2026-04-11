@@ -1,9 +1,11 @@
-import { getHistoricalLogs } from "@/lib/actions";
+import { getHistoricalLogs, getCurrentProfile } from "@/lib/actions";
 import HistoryList from "@/components/history-list";
 
 export default async function GecmisPage() {
   let logs: Awaited<ReturnType<typeof getHistoricalLogs>> = [];
   let error: string | null = null;
+  const profile = await getCurrentProfile();
+  const isAdmin = profile?.role === "admin";
 
   try {
     logs = await getHistoricalLogs(200);
@@ -25,7 +27,7 @@ export default async function GecmisPage() {
           <p className="text-destructive font-medium">{error}</p>
         </div>
       ) : (
-        <HistoryList initialLogs={logs} />
+        <HistoryList initialLogs={logs} isAdmin={isAdmin} />
       )}
     </div>
   );

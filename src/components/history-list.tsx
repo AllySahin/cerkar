@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -12,7 +13,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { History, Search } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { History, Search, Pencil, Trash2, Loader2 } from "lucide-react";
+import { updateProductionLog, deleteProductionLog } from "@/lib/actions";
+import { toast } from "sonner";
 
 interface LogEntry {
   id: string;
@@ -29,10 +39,17 @@ interface LogEntry {
 
 interface HistoryListProps {
   initialLogs: LogEntry[];
+  isAdmin?: boolean;
 }
 
-export default function HistoryList({ initialLogs }: HistoryListProps) {
+export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) {
   const [search, setSearch] = useState("");
+  const [editLog, setEditLog] = useState<LogEntry | null>(null);
+  const [editGood, setEditGood] = useState(0);
+  const [editScrap, setEditScrap] = useState(0);
+  const [editDate, setEditDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return initialLogs;
@@ -58,6 +75,50 @@ export default function HistoryList({ initialLogs }: HistoryListProps) {
     }
     return Array.from(map.entries());
   }, [filtered]);
+
+  const openEdit = (log: LogEntry) => {
+    setEditLog(log);
+    setEditGood(log.good_quantity);
+    setEditScrap(log.scrap_quantity);
+    setEditDate(log.date);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editLog) return;
+    setSaving(true);
+    try {
+      await updateProductionLog(editLog.id, {
+        good_quantity: editGood,
+        scrap_quantity: editScrap,
+        date: editDate,
+      });
+      toast.success("Kayıt güncellendi.");
+      setEditLog(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Güncelleme başarısız."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (log: LogEntry) => {
+    const label = `${log.products?.name ?? "Ürün"} - ${log.date}`;
+    if (!confirm(`"${label}" kaydını silmek istediğinize emin misiniz?`)) return;
+    setDeletingId(log.id);
+    try {
+      await deleteProductionLog(log.id);
+      toast.success("Kayıt silindi.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Silme başarısız."
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -120,6 +181,7 @@ export default function HistoryList({ initialLogs }: HistoryListProps) {
                       <TableHead className="text-center">Sağlam</TableHead>
                       <TableHead className="text-center">Hurda</TableHead>
                       <TableHead className="text-center">Toplam</TableHead>
+                      {isAdmin && <TableHead className="text-center w-24">İşlem</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -140,6 +202,33 @@ export default function HistoryList({ initialLogs }: HistoryListProps) {
                         <TableCell className="text-center font-bold">
                           {log.total_quantity}
                         </TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEdit(log)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(log)}
+                                disabled={deletingId === log.id}
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              >
+                                {deletingId === log.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -153,6 +242,66 @@ export default function HistoryList({ initialLogs }: HistoryListProps) {
       <p className="text-xs text-muted-foreground text-center">
         Toplam {filtered.length} kayıt gösteriliyor
       </p>
+
+      {/* Düzenleme Dialog */}
+      <Dialog open={!!editLog} onOpenChange={(open) => !open && setEditLog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Kaydı Düzenle</DialogTitle>
+          </DialogHeader>
+          {editLog && (
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{editLog.products?.name}</span>
+                {editLog.machines?.name && (
+                  <span> — {editLog.machines.name}</span>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-date">Tarih</Label>
+                <Input
+                  id="edit-date"
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-good">Sağlam Adet</Label>
+                  <Input
+                    id="edit-good"
+                    type="number"
+                    min={0}
+                    value={editGood}
+                    onChange={(e) => setEditGood(Number(e.target.value))}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-scrap">Hurda Adet</Label>
+                  <Input
+                    id="edit-scrap"
+                    type="number"
+                    min={0}
+                    value={editScrap}
+                    onChange={(e) => setEditScrap(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setEditLog(null)}>
+                  İptal
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Güncelle
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

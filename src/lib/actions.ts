@@ -167,6 +167,19 @@ export async function createProduct(name: string) {
   return data;
 }
 
+export async function updateProduct(id: string, name: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ name: name.trim() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/urunler");
+  revalidatePath("/gecmis");
+  revalidatePath("/dashboard");
+}
+
 export async function deleteProduct(id: string) {
   await requireRole("admin");
   const supabase = await createClient();
@@ -202,6 +215,19 @@ export async function createMachine(name: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/makineler");
   return data;
+}
+
+export async function updateMachine(id: string, name: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("machines")
+    .update({ name: name.trim() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/makineler");
+  revalidatePath("/gecmis");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteMachine(id: string) {
@@ -262,6 +288,41 @@ export async function saveProductionLogs(
   revalidatePath("/dashboard");
   revalidatePath("/gecmis");
   return { success: true, count: rows.length };
+}
+
+export async function updateProductionLog(
+  id: string,
+  data: {
+    product_id?: string;
+    machine_id?: string | null;
+    good_quantity?: number;
+    scrap_quantity?: number;
+    date?: string;
+  }
+) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("production_logs")
+    .update(data)
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/gecmis");
+  revalidatePath("/dashboard");
+  revalidatePath("/uretim");
+}
+
+export async function deleteProductionLog(id: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("production_logs")
+    .delete()
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/gecmis");
+  revalidatePath("/dashboard");
+  revalidatePath("/uretim");
 }
 
 // ============================================

@@ -2,6 +2,7 @@ import { getMachines, getCurrentProfile } from "@/lib/actions";
 import type { Machine } from "@/lib/types";
 import AddMachineDialog from "@/components/add-machine-dialog";
 import DeleteMachineButton from "@/components/delete-machine-button";
+import EditMachineButton from "@/components/edit-machine-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Cog } from "lucide-react";
 
@@ -62,7 +63,12 @@ export default async function MakinelerPage() {
                       Eklenme: {new Date(machine.created_at).toLocaleDateString("tr-TR")}
                     </p>
                   </div>
-                  {isAdmin && <DeleteMachineButton id={machine.id} name={machine.name} />}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
+                      <EditMachineButton id={machine.id} name={machine.name} />
+                      <DeleteMachineButton id={machine.id} name={machine.name} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
