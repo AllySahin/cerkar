@@ -15,17 +15,27 @@ import {
 // ============================================
 
 export async function getCurrentProfile(): Promise<Profile | null> {
-  const userId = await getSessionUserId();
-  if (!userId) return null;
+  try {
+    const userId = await getSessionUserId();
+    if (!userId) return null;
 
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
 
-  return data;
+    if (error) {
+      console.error("[AUTH] getCurrentProfile error:", error);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    console.error("[AUTH] getCurrentProfile exception:", err);
+    return null;
+  }
 }
 
 async function requireRole(role: UserRole) {
@@ -42,22 +52,38 @@ async function requireRole(role: UserRole) {
 // ============================================
 
 export async function signIn(username: string, password: string) {
-  const supabase = await createClient();
-  const hash = await hashPassword(password);
+  try {
+    const supabase = await createClient();
+    const hash = await hashPassword(password);
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("username", username)
-    .eq("password_hash", hash)
-    .single();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("username", username)
+      .eq("password_hash", hash)
+      .single();
 
-  if (error || !data) {
-    throw new Error("Kullanıcı adı veya şifre hatalı.");
+    if (error) {
+      console.error("[AUTH] Supabase error:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error("Kullanıcı adı veya şifre hatalı.");
+    }
+
+    if (!data) {
+      console.warn("[AUTH] User not found:", username);
+      throw new Error("Kullanıcı adı veya şifre hatalı.");
+    }
+
+    await setSession(data.id);
+    return data as Profile;
+  } catch (err) {
+    console.error("[AUTH] SignIn error:", err);
+    throw err;
   }
-
-  await setSession(data.id);
-  return data as Profile;
 }
 
 export async function signOut() {
