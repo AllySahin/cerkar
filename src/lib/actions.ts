@@ -19,6 +19,17 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     const userId = await getSessionUserId();
     if (!userId) return null;
 
+    // Fallback admin user
+    if (userId === "admin-fallback-user-id") {
+      return {
+        id: userId,
+        username: "admin",
+        full_name: "Admin",
+        role: "admin",
+        created_at: new Date().toISOString(),
+      };
+    }
+
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("profiles")
@@ -53,6 +64,20 @@ async function requireRole(role: UserRole) {
 
 export async function signIn(username: string, password: string) {
   try {
+    // Fallback: Hardcoded admin user (development)
+    if (username === "admin" && password === "admin") {
+      console.log("[AUTH] Using fallback admin user");
+      const adminProfile: Profile = {
+        id: "admin-fallback-user-id",
+        username: "admin",
+        full_name: "Admin",
+        role: "admin",
+        created_at: new Date().toISOString(),
+      };
+      await setSession(adminProfile.id);
+      return adminProfile;
+    }
+
     const supabase = await createClient();
     const hash = await hashPassword(password);
 
