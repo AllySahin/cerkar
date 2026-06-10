@@ -59,13 +59,22 @@ export default async function UrunlerPage() {
                 >
                   <div>
                     <p className="font-medium">{product.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Eklenme: {new Date(product.created_at).toLocaleDateString("tr-TR")}
-                    </p>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      {product.cycle_time != null ? (
+                        <p className="text-xs text-muted-foreground">
+                          ⏱ Çevrim: <span className="font-medium text-foreground">{product.cycle_time} sn/parça</span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Çevrim süresi girilmemiş</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Eklenme: {new Date(product.created_at).toLocaleDateString("tr-TR")}
+                      </p>
+                    </div>
                   </div>
                   {isAdmin && (
                     <div className="flex items-center gap-1">
-                      <EditProductButton id={product.id} name={product.name} />
+                      <EditProductButton id={product.id} name={product.name} cycleTime={product.cycle_time} />
                       <DeleteProductButton id={product.id} name={product.name} />
                     </div>
                   )}

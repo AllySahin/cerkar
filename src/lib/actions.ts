@@ -216,12 +216,12 @@ export async function getProducts() {
   }
 }
 
-export async function createProduct(name: string) {
+export async function createProduct(name: string, cycleTime?: number | null) {
   await requireRole("admin");
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
-    .insert({ name: name.trim() })
+    .insert({ name: name.trim(), cycle_time: cycleTime ?? null })
     .select()
     .single();
 
@@ -230,12 +230,14 @@ export async function createProduct(name: string) {
   return data;
 }
 
-export async function updateProduct(id: string, name: string) {
+export async function updateProduct(id: string, name: string, cycleTime?: number | null) {
   await requireRole("admin");
   const supabase = await createClient();
+  const updateData: { name: string; cycle_time?: number | null } = { name: name.trim() };
+  if (cycleTime !== undefined) updateData.cycle_time = cycleTime;
   const { error } = await supabase
     .from("products")
-    .update({ name: name.trim() })
+    .update(updateData)
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/urunler");
@@ -325,13 +327,16 @@ export async function saveProductionLogs(
   const supabase = await createClient();
 
   const rows = entries
-    .filter((e) => e.good_quantity > 0 || e.scrap_quantity > 0)
+    .filter((e) => (Number(e.good_quantity) || 0) > 0 || (Number(e.scrap_quantity) || 0) > 0)
     .map((e) => ({
       product_id: e.product_id,
       machine_id: e.machine_id || null,
       date,
-      good_quantity: e.good_quantity,
-      scrap_quantity: e.scrap_quantity,
+      good_quantity: Number(e.good_quantity) || 0,
+      scrap_quantity: Number(e.scrap_quantity) || 0,
+      start_time: e.start_time || "08:00",
+      end_time: e.end_time || "18:00",
+      break_duration: Number(e.break_duration) || 0,
     }));
 
   if (rows.length === 0) {
@@ -356,12 +361,62 @@ export async function saveProductionLogs(
     if (delError) throw new Error(delError.message);
   }
 
-  const { error } = await supabase.from("production_logs").insert(rows);
-
+  const { data: insertedLogs, error } = await supabase
+    .from("production_logs")
+    .insert(rows)
+    .select("id, product_id, machine_id");
+    
   if (error) throw new Error(error.message);
+
+  // İlişkili operatörleri (personnel_ids) kaydet
+  if (insertedLogs && insertedLogs.length > 0) {
+    const operatorRelations: { production_log_id: string; personnel_id: string }[] = [];
+    
+    for (const insertedLog of insertedLogs) {
+      const matchedEntry = entries.find(
+        (e) =>
+          e.product_id === insertedLog.product_id &&
+          (e.machine_id || null) === (insertedLog.machine_id || null)
+      );
+      
+      if (matchedEntry && matchedEntry.personnel_ids && matchedEntry.personnel_ids.length > 0) {
+        for (const pid of matchedEntry.personnel_ids) {
+          operatorRelations.push({
+            production_log_id: insertedLog.id,
+            personnel_id: pid,
+          });
+        }
+      }
+    }
+    
+    if (operatorRelations.length > 0) {
+      const { error: relError } = await supabase
+        .from("production_log_operators")
+        .insert(operatorRelations);
+      if (relError) throw new Error(relError.message);
+    }
+  }
+
+  // Çevrim süresi değiştiyse ürünleri güncelle
+  const cycleTimeUpdates = entries
+    .filter((e) => e.product_id && e.cycle_time !== null && e.cycle_time !== undefined)
+    .reduce((acc, e) => {
+      // Her ürün için son girilen cycle_time'ı al
+      acc[e.product_id] = e.cycle_time as number;
+      return acc;
+    }, {} as Record<string, number>);
+
+  for (const [productId, cycleTime] of Object.entries(cycleTimeUpdates)) {
+    await supabase
+      .from("products")
+      .update({ cycle_time: cycleTime })
+      .eq("id", productId);
+  }
+
   revalidatePath("/uretim");
   revalidatePath("/dashboard");
   revalidatePath("/gecmis");
+  revalidatePath("/urunler");
   return { success: true, count: rows.length };
 }
 
@@ -373,15 +428,42 @@ export async function updateProductionLog(
     good_quantity?: number;
     scrap_quantity?: number;
     date?: string;
+    personnel_ids?: string[];
   }
 ) {
   await requireRole("admin");
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("production_logs")
-    .update(data)
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  const { personnel_ids, ...logData } = data;
+
+  if (Object.keys(logData).length > 0) {
+    const { error } = await supabase
+      .from("production_logs")
+      .update(logData)
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+  }
+
+  if (personnel_ids !== undefined) {
+    // Mevcut ilişkileri temizle
+    const { error: delError } = await supabase
+      .from("production_log_operators")
+      .delete()
+      .eq("production_log_id", id);
+    if (delError) throw new Error(delError.message);
+
+    // Yeni ilişkileri ekle
+    if (personnel_ids.length > 0) {
+      const relationRows = personnel_ids.map((pid) => ({
+        production_log_id: id,
+        personnel_id: pid,
+      }));
+      const { error: insError } = await supabase
+        .from("production_log_operators")
+        .insert(relationRows);
+      if (insError) throw new Error(insError.message);
+    }
+  }
+
   revalidatePath("/gecmis");
   revalidatePath("/dashboard");
   revalidatePath("/uretim");
@@ -461,7 +543,7 @@ export async function getDashboardData(date: string) {
 
   const { data: logs, error } = await supabase
     .from("production_logs")
-    .select("*, products(id, name), machines(id, name)")
+    .select("*, products(id, name), machines(id, name), production_log_operators(personnel(id, name))")
     .eq("date", date)
     .order("created_at");
 
@@ -503,7 +585,7 @@ export async function getHistoricalLogs(limit = 100) {
 
   const { data, error } = await supabase
     .from("production_logs")
-    .select("*, products(id, name), machines(id, name)")
+    .select("*, products(id, name), machines(id, name), production_log_operators(personnel(id, name))")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -521,7 +603,7 @@ export async function getReportData(startDate: string, endDate: string) {
 
   const { data, error } = await supabase
     .from("production_logs")
-    .select("*, products(id, name), machines(id, name)")
+    .select("*, products(id, name, cycle_time), machines(id, name), production_log_operators(personnel(id, name))")
     .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: true })
@@ -529,4 +611,301 @@ export async function getReportData(startDate: string, endDate: string) {
 
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+// ============================================
+// Personel (Operatör) İşlemleri
+// ============================================
+
+export async function getPersonnel() {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("personnel")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      console.error("[DB] getPersonnel error:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("[DB] getPersonnel exception:", err);
+    return [];
+  }
+}
+
+export async function createPersonnel(name: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("personnel")
+    .insert({ name: name.trim() })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/personel");
+  return data;
+}
+
+export async function updatePersonnel(id: string, name: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("personnel")
+    .update({ name: name.trim() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/personel");
+  revalidatePath("/gecmis");
+  revalidatePath("/dashboard");
+}
+
+export async function deletePersonnel(id: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase.from("personnel").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/personel");
+}
+
+// ============================================
+// Verim İstatistikleri
+// ============================================
+
+/** Bir production_log kaydından verim % hesaplar. NULL ise null döner. */
+function calcEfficiency(log: {
+  good_quantity: number;
+  start_time: string | null;
+  end_time: string | null;
+  break_duration: number;
+  cycle_time: number | null; // saniye
+}): number | null {
+  const { good_quantity, start_time, end_time, break_duration, cycle_time } = log;
+  if (!start_time || !end_time || !cycle_time || cycle_time <= 0) return null;
+
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
+
+  const available = toMinutes(end_time) - toMinutes(start_time) - (break_duration ?? 0);
+  if (available <= 0) return null;
+
+  const expectedOutput = (available * 60) / cycle_time;
+  if (expectedOutput <= 0) return null;
+
+  return Math.round((good_quantity / expectedOutput) * 100);
+}
+
+export interface MachineLogSummary {
+  date: string;
+  product_name: string;
+  start_time: string | null;
+  end_time: string | null;
+  break_duration: number;
+  good_quantity: number;
+  efficiency_percent: number | null;
+  working_minutes: number | null;
+}
+
+export interface MachineStat {
+  id: string;
+  name: string;
+  avg_efficiency: number | null;
+  total_working_minutes: number;
+  log_count: number;
+  logs: MachineLogSummary[];
+}
+
+export async function getMachineStats(startDate?: string, endDate?: string): Promise<MachineStat[]> {
+  const supabase = await createClient();
+
+  const { data: machines, error: mErr } = await supabase
+    .from("machines")
+    .select("id, name")
+    .order("name");
+
+  if (mErr || !machines) return [];
+
+  let query = supabase
+    .from("production_logs")
+    .select(
+      "id, machine_id, date, good_quantity, start_time, end_time, break_duration, products(name, cycle_time)"
+    );
+
+  if (startDate) {
+    query = query.gte("date", startDate);
+  }
+  if (endDate) {
+    query = query.lte("date", endDate);
+  }
+
+  const { data: logs, error: lErr } = await query.order("date", { ascending: false });
+
+  if (lErr || !logs) {
+    return machines.map((m) => ({
+      id: m.id,
+      name: m.name,
+      avg_efficiency: null,
+      total_working_minutes: 0,
+      log_count: 0,
+      logs: [],
+    }));
+  }
+
+  return machines.map((machine) => {
+    const machineLogs = logs.filter((l) => l.machine_id === machine.id);
+
+    const summaries: MachineLogSummary[] = machineLogs.map((l) => {
+      const product = l.products as unknown as { name: string; cycle_time: number | null } | null;
+      const toMin = (t: string | null) => {
+        if (!t) return null;
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + m;
+      };
+      const startMin = toMin(l.start_time);
+      const endMin = toMin(l.end_time);
+      const working = startMin !== null && endMin !== null
+        ? endMin - startMin - (l.break_duration ?? 0)
+        : null;
+
+      return {
+        date: l.date,
+        product_name: product?.name ?? "—",
+        start_time: l.start_time,
+        end_time: l.end_time,
+        break_duration: l.break_duration ?? 0,
+        good_quantity: l.good_quantity,
+        working_minutes: working && working > 0 ? working : null,
+        efficiency_percent: calcEfficiency({
+          good_quantity: l.good_quantity,
+          start_time: l.start_time,
+          end_time: l.end_time,
+          break_duration: l.break_duration ?? 0,
+          cycle_time: product?.cycle_time ?? null,
+        }),
+      };
+    });
+
+    const withEff = summaries.filter((s) => s.efficiency_percent !== null);
+    const avg =
+      withEff.length > 0
+        ? Math.round(withEff.reduce((acc, s) => acc + s.efficiency_percent!, 0) / withEff.length)
+        : null;
+
+    const totalWorking = summaries.reduce((acc, s) => acc + (s.working_minutes ?? 0), 0);
+
+    return {
+      id: machine.id,
+      name: machine.name,
+      avg_efficiency: avg,
+      total_working_minutes: totalWorking,
+      log_count: machineLogs.length,
+      logs: summaries,
+    };
+  });
+}
+
+export interface PersonnelLogSummary {
+  date: string;
+  product_name: string;
+  machine_name: string;
+  good_quantity: number;
+  efficiency_percent: number | null;
+}
+
+export interface PersonnelStat {
+  id: string;
+  name: string;
+  avg_efficiency: number | null;
+  log_count: number;
+  logs: PersonnelLogSummary[];
+}
+
+export async function getPersonnelStats(startDate?: string, endDate?: string): Promise<PersonnelStat[]> {
+  const supabase = await createClient();
+
+  const { data: personnelList, error: pErr } = await supabase
+    .from("personnel")
+    .select("id, name")
+    .order("name");
+
+  if (pErr || !personnelList) return [];
+
+  let query = supabase
+    .from("production_log_operators")
+    .select(
+      "personnel_id, production_logs!inner(id, date, good_quantity, start_time, end_time, break_duration, products(name, cycle_time), machines(name))"
+    );
+
+  if (startDate) {
+    query = query.gte("production_logs.date", startDate);
+  }
+  if (endDate) {
+    query = query.lte("production_logs.date", endDate);
+  }
+
+  const { data: relations, error: rErr } = await query;
+
+  if (rErr || !relations) {
+    return personnelList.map((p) => ({
+      id: p.id,
+      name: p.name,
+      avg_efficiency: null,
+      log_count: 0,
+      logs: [],
+    }));
+  }
+
+  return personnelList.map((person) => {
+    const personRelations = relations.filter((r) => r.personnel_id === person.id);
+
+    const summaries: PersonnelLogSummary[] = personRelations.map((r) => {
+      const log = r.production_logs as unknown as {
+        id: string;
+        date: string;
+        good_quantity: number;
+        start_time: string | null;
+        end_time: string | null;
+        break_duration: number;
+        products: { name: string; cycle_time: number | null } | null;
+        machines: { name: string } | null;
+      } | null;
+
+      if (!log) {
+        return { date: "", product_name: "—", machine_name: "—", good_quantity: 0, efficiency_percent: null };
+      }
+
+      return {
+        date: log.date,
+        product_name: log.products?.name ?? "—",
+        machine_name: log.machines?.name ?? "—",
+        good_quantity: log.good_quantity,
+        efficiency_percent: calcEfficiency({
+          good_quantity: log.good_quantity,
+          start_time: log.start_time,
+          end_time: log.end_time,
+          break_duration: log.break_duration ?? 0,
+          cycle_time: log.products?.cycle_time ?? null,
+        }),
+      };
+    });
+
+    const withEff = summaries.filter((s) => s.efficiency_percent !== null);
+    const avg =
+      withEff.length > 0
+        ? Math.round(withEff.reduce((acc, s) => acc + s.efficiency_percent!, 0) / withEff.length)
+        : null;
+
+    return {
+      id: person.id,
+      name: person.name,
+      avg_efficiency: avg,
+      log_count: personRelations.length,
+      logs: summaries.sort((a, b) => b.date.localeCompare(a.date)),
+    };
+  });
 }

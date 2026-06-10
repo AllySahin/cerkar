@@ -20,8 +20,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { History, Search, Pencil, Trash2, Loader2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { History, Search, Pencil, Trash2, Loader2, Users } from "lucide-react";
 import { updateProductionLog, deleteProductionLog } from "@/lib/actions";
+import { type Personnel } from "@/lib/types";
 import { toast } from "sonner";
 
 interface LogEntry {
@@ -35,31 +42,48 @@ interface LogEntry {
   created_at: string;
   products: { id: string; name: string };
   machines: { id: string; name: string } | null;
+  production_log_operators?: {
+    personnel: { id: string; name: string };
+  }[];
 }
 
 interface HistoryListProps {
   initialLogs: LogEntry[];
   isAdmin?: boolean;
+  personnel?: Personnel[];
 }
 
-export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) {
+export default function HistoryList({ initialLogs, isAdmin, personnel = [] }: HistoryListProps) {
   const [search, setSearch] = useState("");
   const [editLog, setEditLog] = useState<LogEntry | null>(null);
   const [editGood, setEditGood] = useState(0);
   const [editScrap, setEditScrap] = useState(0);
   const [editDate, setEditDate] = useState("");
+  const [editPersonnelIds, setEditPersonnelIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const personnelMap = useMemo(
+    () => new Map(personnel.map((p) => [p.id, p])),
+    [personnel]
+  );
 
   const filtered = useMemo(() => {
     if (!search.trim()) return initialLogs;
     const q = search.toLowerCase();
-    return initialLogs.filter(
-      (log) =>
+    return initialLogs.filter((log) => {
+      const opsStr = log.production_log_operators
+        ?.map((op) => op.personnel?.name)
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase() || "";
+      return (
         log.products?.name?.toLowerCase().includes(q) ||
         log.machines?.name?.toLowerCase().includes(q) ||
-        log.date.includes(q)
-    );
+        log.date.includes(q) ||
+        opsStr.includes(q)
+      );
+    });
   }, [initialLogs, search]);
 
   // Group by date
@@ -81,6 +105,11 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
     setEditGood(log.good_quantity);
     setEditScrap(log.scrap_quantity);
     setEditDate(log.date);
+    setEditPersonnelIds(
+      log.production_log_operators
+        ?.map((op) => op.personnel?.id)
+        .filter(Boolean) || []
+    );
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -92,6 +121,7 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
         good_quantity: editGood,
         scrap_quantity: editScrap,
         date: editDate,
+        personnel_ids: editPersonnelIds,
       });
       toast.success("Kayıt güncellendi.");
       setEditLog(null);
@@ -126,7 +156,7 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Ürün, makine veya tarih ara..."
+          placeholder="Ürün, makine, operatör veya tarih ara..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -178,6 +208,7 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
                     <TableRow>
                       <TableHead>Ürün</TableHead>
                       <TableHead>Makine</TableHead>
+                      <TableHead>Operatörler</TableHead>
                       <TableHead className="text-center">Sağlam</TableHead>
                       <TableHead className="text-center">Hurda</TableHead>
                       <TableHead className="text-center">Toplam</TableHead>
@@ -185,52 +216,61 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {logs.map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell className="font-medium">
-                          {log.products?.name ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {log.machines?.name ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-center text-emerald-600 font-semibold">
-                          {log.good_quantity}
-                        </TableCell>
-                        <TableCell className="text-center text-red-600 font-semibold">
-                          {log.scrap_quantity}
-                        </TableCell>
-                        <TableCell className="text-center font-bold">
-                          {log.total_quantity}
-                        </TableCell>
-                        {isAdmin && (
-                          <TableCell className="text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openEdit(log)}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(log)}
-                                disabled={deletingId === log.id}
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                              >
-                                {deletingId === log.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            </div>
+                    {logs.map((log) => {
+                      const operatorsStr = log.production_log_operators
+                        ?.map((op) => op.personnel?.name)
+                        .filter(Boolean)
+                        .join(", ") || "—";
+                      return (
+                        <TableRow key={log.id}>
+                          <TableCell className="font-medium">
+                            {log.products?.name ?? "—"}
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          <TableCell className="text-muted-foreground">
+                            {log.machines?.name ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground max-w-[150px] truncate" title={operatorsStr}>
+                            {operatorsStr}
+                          </TableCell>
+                          <TableCell className="text-center text-emerald-600 font-semibold">
+                            {log.good_quantity}
+                          </TableCell>
+                          <TableCell className="text-center text-red-600 font-semibold">
+                            {log.scrap_quantity}
+                          </TableCell>
+                          <TableCell className="text-center font-bold">
+                            {log.total_quantity}
+                          </TableCell>
+                          {isAdmin && (
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openEdit(log)}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(log)}
+                                  disabled={deletingId === log.id}
+                                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                >
+                                  {deletingId === log.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -257,6 +297,7 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
                   <span> — {editLog.machines.name}</span>
                 )}
               </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="edit-date">Tarih</Label>
                 <Input
@@ -266,6 +307,7 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
                   onChange={(e) => setEditDate(e.target.value)}
                 />
               </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-good">Sağlam Adet</Label>
@@ -289,6 +331,65 @@ export default function HistoryList({ initialLogs, isAdmin }: HistoryListProps) 
                   />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label>Operatörler (Çoklu Seçim)</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    type="button"
+                    className="inline-flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-xs hover:bg-accent hover:text-accent-foreground w-full text-left font-normal"
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden truncate">
+                      <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      {editPersonnelIds.length === 0 ? (
+                        <span className="text-muted-foreground">Operatör seçin...</span>
+                      ) : (
+                        <span className="truncate">
+                          {editPersonnelIds
+                            .map((pid) => personnelMap.get(pid)?.name)
+                            .filter(Boolean)
+                            .join(", ")}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-muted-foreground text-xs ml-2 shrink-0">
+                      ({editPersonnelIds.length})
+                    </span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-72 max-h-60 overflow-y-auto">
+                    {personnel.map((p) => {
+                      const isChecked = editPersonnelIds.includes(p.id);
+                      return (
+                        <DropdownMenuCheckboxItem
+                          key={p.id}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => {
+                            const newIds = checked
+                              ? [...editPersonnelIds, p.id]
+                              : editPersonnelIds.filter((id) => id !== p.id);
+                            setEditPersonnelIds(newIds);
+                          }}
+                        >
+                          {p.name}
+                        </DropdownMenuCheckboxItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {editPersonnelIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {editPersonnelIds.map((pid) => {
+                      const pName = personnelMap.get(pid)?.name || "";
+                      return (
+                        <Badge key={pid} variant="secondary" className="text-[10px] py-0 px-1.5 font-normal">
+                          {pName}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setEditLog(null)}>
                   İptal

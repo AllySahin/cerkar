@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { updateProduct } from "@/lib/actions";
+import { updatePersonnel } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,39 +14,28 @@ import {
 import { Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function EditProductButton({
+export default function EditPersonnelButton({
   id,
   name,
-  cycleTime,
 }: {
   id: string;
   name: string;
-  cycleTime?: number | null;
 }) {
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState(name);
-  const [newCycleTime, setNewCycleTime] = useState(
-    cycleTime != null ? String(cycleTime) : ""
-  );
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) {
-      toast.error("Ürün adı boş olamaz.");
-      return;
-    }
-
-    const parsedCycleTime = newCycleTime ? Number(newCycleTime) : null;
-    if (newCycleTime && (isNaN(parsedCycleTime!) || parsedCycleTime! <= 0)) {
-      toast.error("Çevrim süresi geçerli bir sayı olmalıdır.");
+      toast.error("Personel adı boş olamaz.");
       return;
     }
 
     setLoading(true);
     try {
-      await updateProduct(id, newName, parsedCycleTime);
-      toast.success("Ürün güncellendi.");
+      await updatePersonnel(id, newName);
+      toast.success("Personel güncellendi.");
       setOpen(false);
     } catch (error) {
       toast.error(
@@ -64,7 +53,6 @@ export default function EditProductButton({
         size="sm"
         onClick={() => {
           setNewName(name);
-          setNewCycleTime(cycleTime != null ? String(cycleTime) : "");
           setOpen(true);
         }}
         className="h-8 w-8 p-0"
@@ -74,31 +62,16 @@ export default function EditProductButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Ürünü Düzenle</DialogTitle>
+            <DialogTitle>Personeli Düzenle</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-product-name">Ürün Adı</Label>
+              <Label htmlFor="edit-personnel-name">Personel Adı Soyadı</Label>
               <Input
-                id="edit-product-name"
+                id="edit-personnel-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 autoFocus
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-cycle-time">
-                Çevrim Süresi (saniye/parça)
-                <span className="text-muted-foreground font-normal ml-1">(opsiyonel)</span>
-              </Label>
-              <Input
-                id="edit-cycle-time"
-                type="number"
-                min={0}
-                step={0.1}
-                value={newCycleTime}
-                onChange={(e) => setNewCycleTime(e.target.value)}
-                placeholder="Örn: 45"
               />
             </div>
             <div className="flex justify-end gap-2">

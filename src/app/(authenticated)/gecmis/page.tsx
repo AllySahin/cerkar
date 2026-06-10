@@ -1,14 +1,18 @@
-import { getHistoricalLogs, getCurrentProfile } from "@/lib/actions";
+import { getHistoricalLogs, getCurrentProfile, getPersonnel } from "@/lib/actions";
 import HistoryList from "@/components/history-list";
 
 export default async function GecmisPage() {
   let logs: Awaited<ReturnType<typeof getHistoricalLogs>> = [];
+  let personnelList: Awaited<ReturnType<typeof getPersonnel>> = [];
   let error: string | null = null;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
 
   try {
-    logs = await getHistoricalLogs(200);
+    [logs, personnelList] = await Promise.all([
+      getHistoricalLogs(200),
+      getPersonnel()
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : "Veriler yüklenirken hata oluştu.";
   }
@@ -27,7 +31,7 @@ export default async function GecmisPage() {
           <p className="text-destructive font-medium">{error}</p>
         </div>
       ) : (
-        <HistoryList initialLogs={logs} isAdmin={isAdmin} />
+        <HistoryList initialLogs={logs} isAdmin={isAdmin} personnel={personnelList} />
       )}
     </div>
   );

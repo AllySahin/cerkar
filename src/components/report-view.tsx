@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Loader2, FileSpreadsheet, Search, CalendarDays, CalendarRange, Calendar } from "lucide-react";
+import { Download, Loader2, FileSpreadsheet, Search, CalendarDays, CalendarRange, Calendar, Gauge } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -22,6 +22,49 @@ type ReportRow = Awaited<ReturnType<typeof getReportData>>[number];
 
 function formatDate(d: Date) {
   return d.toISOString().split("T")[0];
+}
+
+// Saat stringini dakikaya çevir
+function timeToMinutes(time: string | null | undefined): number {
+  if (!time) return 0;
+  const [h, m] = time.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+// Bir satır için verim hesapla
+function calcRowEfficiency(row: ReportRow): {
+  availableMinutes: number;
+  expectedOutput: number;
+  efficiencyPercent: number;
+} | null {
+  const product = row.products as { id: string; name: string; cycle_time?: number | null } | null;
+  const cycleTime = product?.cycle_time ?? null;
+  if (!cycleTime || cycleTime <= 0) return null;
+
+  const startMin = timeToMinutes(row.start_time as string | null);
+  const endMin = timeToMinutes(row.end_time as string | null);
+  const breakDur = (row.break_duration as number) || 0;
+  const availableMinutes = endMin - startMin - breakDur;
+  if (availableMinutes <= 0) return null;
+
+  const availableSeconds = availableMinutes * 60;
+  const expectedOutput = availableSeconds / cycleTime;
+  if (expectedOutput <= 0) return null;
+
+  const efficiencyPercent = (row.good_quantity / expectedOutput) * 100;
+  return { availableMinutes, expectedOutput, efficiencyPercent };
+}
+
+function EfficiencyCell({ eff }: { eff: ReturnType<typeof calcRowEfficiency> }) {
+  if (!eff) return <span className="text-muted-foreground text-xs">—</span>;
+  const pct = eff.efficiencyPercent;
+  const color =
+    pct >= 90
+      ? "text-emerald-600 font-bold"
+      : pct >= 70
+      ? "text-amber-600 font-bold"
+      : "text-red-600 font-bold";
+  return <span className={color}>%{pct.toFixed(1)}</span>;
 }
 
 export default function ReportView() {
@@ -41,9 +84,8 @@ export default function ReportView() {
   };
 
   const setWeekly = () => {
-    // Bir önceki haftanın Pazartesi-Pazar aralığı
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Pazar
+    const dayOfWeek = now.getDay();
     const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const thisMonday = new Date(now);
     thisMonday.setDate(now.getDate() - diffToMonday);
@@ -56,7 +98,6 @@ export default function ReportView() {
   };
 
   const setMonthly = () => {
-    // Bir önceki ayın ilk ve son günü
     const now = new Date();
     const firstOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
@@ -97,30 +138,42 @@ export default function ReportView() {
       return;
     }
 
-    const rows = data.map((row) => ({
-      Tarih: row.date,
-      Ürün: (row.products as { name: string })?.name ?? "-",
-      Makine: (row.machines as { name: string } | null)?.name ?? "-",
-      "Sağlam Adet": row.good_quantity,
-      "Hurda Adet": row.scrap_quantity,
-      "Toplam Adet": row.total_quantity,
-    }));
+    const getOperatorsString = (row: ReportRow) => {
+      if (!row.production_log_operators || row.production_log_operators.length === 0) return "-";
+      return row.production_log_operators
+        .map((op: any) => op.personnel?.name)
+        .filter(Boolean)
+        .join(", ");
+    };
+
+    const rows = data.map((row) => {
+      const eff = calcRowEfficiency(row);
+      return {
+        Tarih: row.date,
+        Ürün: (row.products as { name: string })?.name ?? "-",
+        Makine: (row.machines as { name: string } | null)?.name ?? "-",
+        "Operatörler": getOperatorsString(row),
+        "Başlangıç": row.start_time ?? "-",
+        "Bitiş": row.end_time ?? "-",
+        "Mola (dk)": row.break_duration ?? 0,
+        "Sağlam Adet": row.good_quantity,
+        "Hurda Adet": row.scrap_quantity,
+        "Toplam Adet": row.total_quantity,
+        "Beklenen Çıktı": eff ? Math.round(eff.expectedOutput) : "-",
+        "Verim (%)": eff ? Number(eff.efficiencyPercent.toFixed(1)) : "-",
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(rows);
-
-    // Sütun genişliklerini ayarla
     ws["!cols"] = [
-      { wch: 12 },
-      { wch: 25 },
-      { wch: 20 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 14 },
+      { wch: 12 }, { wch: 25 }, { wch: 20 }, { wch: 25 },
+      { wch: 10 }, { wch: 10 }, { wch: 10 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 },
+      { wch: 16 }, { wch: 12 },
     ];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Üretim Raporu");
-
     XLSX.writeFile(wb, `Cerkar_Uretim_Raporu_${startDate}_${endDate}.xlsx`);
     toast.success("Excel dosyası indirildi!");
   };
@@ -128,6 +181,24 @@ export default function ReportView() {
   const totalGood = data.reduce((sum, r) => sum + r.good_quantity, 0);
   const totalScrap = data.reduce((sum, r) => sum + r.scrap_quantity, 0);
   const totalAll = data.reduce((sum, r) => sum + r.total_quantity, 0);
+
+  // Ortalama verim: sadece hesaplanabilenler
+  const efficiencies = data
+    .map((r) => calcRowEfficiency(r))
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+  const avgEfficiency =
+    efficiencies.length > 0
+      ? efficiencies.reduce((s, e) => s + e.efficiencyPercent, 0) / efficiencies.length
+      : null;
+
+  const avgEffColor =
+    avgEfficiency == null
+      ? ""
+      : avgEfficiency >= 90
+      ? "text-emerald-600"
+      : avgEfficiency >= 70
+      ? "text-amber-600"
+      : "text-red-600";
 
   return (
     <div className="space-y-6">
@@ -140,7 +211,6 @@ export default function ReportView() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Hızlı Erişim Butonları */}
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={setDaily}>
               <CalendarDays className="h-4 w-4 mr-1.5" />
@@ -197,7 +267,7 @@ export default function ReportView() {
 
       {/* Özet Kartları */}
       {fetched && data.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Card>
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">Toplam Kayıt</p>
@@ -222,6 +292,21 @@ export default function ReportView() {
               <p className="text-2xl font-bold">{totalAll.toLocaleString("tr-TR")}</p>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Gauge className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Ort. Verim</p>
+              </div>
+              {avgEfficiency != null ? (
+                <p className={`text-2xl font-bold ${avgEffColor}`}>
+                  %{avgEfficiency.toFixed(1)}
+                </p>
+              ) : (
+                <p className="text-2xl font-bold text-muted-foreground">—</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -241,28 +326,52 @@ export default function ReportView() {
                       <TableHead>Tarih</TableHead>
                       <TableHead>Ürün</TableHead>
                       <TableHead>Makine</TableHead>
+                      <TableHead>Operatörler</TableHead>
                       <TableHead className="text-right">Sağlam</TableHead>
                       <TableHead className="text-right">Hurda</TableHead>
                       <TableHead className="text-right">Toplam</TableHead>
+                      <TableHead className="text-center">Beklenen</TableHead>
+                      <TableHead className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Gauge className="h-3.5 w-3.5" />
+                          Verim
+                        </div>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.date}</TableCell>
-                        <TableCell className="font-medium">
-                          {(row.products as { name: string })?.name ?? "-"}
-                        </TableCell>
-                        <TableCell>
-                          {(row.machines as { name: string } | null)?.name ?? "-"}
-                        </TableCell>
-                        <TableCell className="text-right">{row.good_quantity}</TableCell>
-                        <TableCell className="text-right">{row.scrap_quantity}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {row.total_quantity}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {data.map((row) => {
+                      const eff = calcRowEfficiency(row);
+                      const operatorsStr = row.production_log_operators
+                        ?.map((op: any) => op.personnel?.name)
+                        .filter(Boolean)
+                        .join(", ") || "—";
+                      return (
+                        <TableRow key={row.id}>
+                          <TableCell>{row.date}</TableCell>
+                          <TableCell className="font-medium">
+                            {(row.products as { name: string })?.name ?? "-"}
+                          </TableCell>
+                          <TableCell>
+                            {(row.machines as { name: string } | null)?.name ?? "-"}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate" title={operatorsStr}>
+                            {operatorsStr}
+                          </TableCell>
+                          <TableCell className="text-right">{row.good_quantity}</TableCell>
+                          <TableCell className="text-right">{row.scrap_quantity}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {row.total_quantity}
+                          </TableCell>
+                          <TableCell className="text-center text-muted-foreground text-sm">
+                            {eff ? Math.round(eff.expectedOutput) : "—"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <EfficiencyCell eff={eff} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

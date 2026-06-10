@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   Users,
   LogOut,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/rapor", label: "Rapor", icon: FileSpreadsheet, adminOnly: false },
   { href: "/urunler", label: "Ürünler", icon: Package, adminOnly: false },
   { href: "/makineler", label: "Makineler", icon: Cog, adminOnly: false },
+  { href: "/personel", label: "Personel", icon: Briefcase, adminOnly: false },
   { href: "/kullanicilar", label: "Kullanıcılar", icon: Users, adminOnly: true },
 ];
 

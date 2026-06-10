@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createProduct } from "@/lib/actions";
+import { createPersonnel } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,35 +15,27 @@ import {
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function AddProductDialog() {
+export default function AddPersonnelDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [cycleTime, setCycleTime] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error("Ürün adı boş olamaz.");
-      return;
-    }
-
-    const parsedCycleTime = cycleTime ? Number(cycleTime) : null;
-    if (cycleTime && (isNaN(parsedCycleTime!) || parsedCycleTime! <= 0)) {
-      toast.error("Çevrim süresi geçerli bir sayı olmalıdır.");
+      toast.error("Personel adı boş olamaz.");
       return;
     }
 
     setLoading(true);
     try {
-      await createProduct(name, parsedCycleTime);
-      toast.success(`"${name}" ürünü eklendi.`);
+      await createPersonnel(name);
+      toast.success(`"${name}" personeli eklendi.`);
       setName("");
-      setCycleTime("");
       setOpen(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Ürün eklenirken hata oluştu."
+        error instanceof Error ? error.message : "Personel eklenirken hata oluştu."
       );
     } finally {
       setLoading(false);
@@ -56,36 +48,21 @@ export default function AddProductDialog() {
         className="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-xs hover:bg-accent hover:text-accent-foreground"
       >
         <Plus className="h-4 w-4" />
-        Yeni Ürün
+        Yeni Personel
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Yeni Ürün Ekle</DialogTitle>
+          <DialogTitle>Yeni Personel Ekle</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="product-name">Ürün Adı</Label>
+            <Label htmlFor="personnel-name">Personel Adı Soyadı</Label>
             <Input
-              id="product-name"
+              id="personnel-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Örn: XX Parçası"
+              placeholder="Örn: AHMET TEKİN"
               autoFocus
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="product-cycle-time">
-              Çevrim Süresi (saniye/parça)
-              <span className="text-muted-foreground font-normal ml-1">(opsiyonel)</span>
-            </Label>
-            <Input
-              id="product-cycle-time"
-              type="number"
-              min={0}
-              step={0.1}
-              value={cycleTime}
-              onChange={(e) => setCycleTime(e.target.value)}
-              placeholder="Örn: 45"
             />
           </div>
           <div className="flex justify-end gap-2">
