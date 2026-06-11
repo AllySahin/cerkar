@@ -26,9 +26,16 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { History, Search, Pencil, Trash2, Loader2, Users } from "lucide-react";
 import { updateProductionLog, deleteProductionLog } from "@/lib/actions";
-import { type Personnel } from "@/lib/types";
+import { type Personnel, type ScrapReason } from "@/lib/types";
 import { toast } from "sonner";
 
 interface LogEntry {
@@ -38,6 +45,8 @@ interface LogEntry {
   date: string;
   good_quantity: number;
   scrap_quantity: number;
+  scrap_reason_id?: string | null;
+  scrap_reasons?: ScrapReason | null;
   total_quantity: number;
   created_at: string;
   products: { id: string; name: string };
@@ -51,13 +60,15 @@ interface HistoryListProps {
   initialLogs: LogEntry[];
   isAdmin?: boolean;
   personnel?: Personnel[];
+  scrapReasons?: ScrapReason[];
 }
 
-export default function HistoryList({ initialLogs, isAdmin, personnel = [] }: HistoryListProps) {
+export default function HistoryList({ initialLogs, isAdmin, personnel = [], scrapReasons = [] }: HistoryListProps) {
   const [search, setSearch] = useState("");
   const [editLog, setEditLog] = useState<LogEntry | null>(null);
   const [editGood, setEditGood] = useState(0);
   const [editScrap, setEditScrap] = useState(0);
+  const [editScrapReasonId, setEditScrapReasonId] = useState<string>("");
   const [editDate, setEditDate] = useState("");
   const [editPersonnelIds, setEditPersonnelIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -104,6 +115,7 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [] }: Hi
     setEditLog(log);
     setEditGood(log.good_quantity);
     setEditScrap(log.scrap_quantity);
+    setEditScrapReasonId(log.scrap_reason_id || "");
     setEditDate(log.date);
     setEditPersonnelIds(
       log.production_log_operators
@@ -115,11 +127,18 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [] }: Hi
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editLog) return;
+
+    if (editScrap > 0 && !editScrapReasonId) {
+      toast.error("Hurda adedi girilen ürünlerde hurda sebebi seçilmelidir.");
+      return;
+    }
+
     setSaving(true);
     try {
       await updateProductionLog(editLog.id, {
         good_quantity: editGood,
         scrap_quantity: editScrap,
+        scrap_reason_id: editScrap > 0 ? editScrapReasonId : null,
         date: editDate,
         personnel_ids: editPersonnelIds,
       });
@@ -236,7 +255,12 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [] }: Hi
                             {log.good_quantity}
                           </TableCell>
                           <TableCell className="text-center text-red-600 font-semibold">
-                            {log.scrap_quantity}
+                            <div>{log.scrap_quantity}</div>
+                            {log.scrap_reasons && (
+                              <span className="text-[10px] text-muted-foreground block font-normal mt-0.5">
+                                ({log.scrap_reasons.reason})
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-center font-bold">
                             {log.total_quantity}
@@ -327,10 +351,35 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [] }: Hi
                     type="number"
                     min={0}
                     value={editScrap}
-                    onChange={(e) => setEditScrap(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setEditScrap(val);
+                      if (val === 0) setEditScrapReasonId("");
+                    }}
                   />
                 </div>
               </div>
+ 
+              {editScrap > 0 && (
+                <div className="space-y-2 animate-in fade-in duration-200">
+                  <Label htmlFor="edit-scrap-reason" className="text-red-500 font-semibold">Hurda Sebebi</Label>
+                  <Select
+                    value={editScrapReasonId || ""}
+                    onValueChange={(val) => setEditScrapReasonId(val || "")}
+                  >
+                    <SelectTrigger id="edit-scrap-reason" className="w-full border-red-200 focus:border-red-500">
+                      <SelectValue placeholder="Hurda sebebi seçin..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {scrapReasons.map((reason) => (
+                        <SelectItem key={reason.id} value={reason.id}>
+                          {reason.reason}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Operatörler (Çoklu Seçim)</Label>

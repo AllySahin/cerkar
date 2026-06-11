@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { getReportData } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Loader2, FileSpreadsheet, Search, CalendarDays, CalendarRange, Calendar, Gauge } from "lucide-react";
+import { Download, Loader2, FileSpreadsheet, Search, CalendarDays, CalendarRange, Calendar, Gauge, AlertTriangle } from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Legend,
+  Tooltip as ChartTooltip,
+} from "recharts";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -158,6 +166,7 @@ export default function ReportView() {
         "Mola (dk)": row.break_duration ?? 0,
         "Sağlam Adet": row.good_quantity,
         "Hurda Adet": row.scrap_quantity,
+        "Hurda Sebebi": (row.scrap_reasons as { reason: string } | null)?.reason ?? "-",
         "Toplam Adet": row.total_quantity,
         "Beklenen Çıktı": eff ? Math.round(eff.expectedOutput) : "-",
         "Verim (%)": eff ? Number(eff.efficiencyPercent.toFixed(1)) : "-",
@@ -168,7 +177,7 @@ export default function ReportView() {
     ws["!cols"] = [
       { wch: 12 }, { wch: 25 }, { wch: 20 }, { wch: 25 },
       { wch: 10 }, { wch: 10 }, { wch: 10 },
-      { wch: 14 }, { wch: 14 }, { wch: 14 },
+      { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 14 },
       { wch: 16 }, { wch: 12 },
     ];
 
@@ -181,6 +190,37 @@ export default function ReportView() {
   const totalGood = data.reduce((sum, r) => sum + r.good_quantity, 0);
   const totalScrap = data.reduce((sum, r) => sum + r.scrap_quantity, 0);
   const totalAll = data.reduce((sum, r) => sum + r.total_quantity, 0);
+ 
+  // Hurda sebepleri analizi verisini hesapla
+  const scrapReasonStats = useMemo(() => {
+    if (!data.length) return [];
+    
+    const reasonCounts: Record<string, { name: string; value: number }> = {};
+    let totalScrapCount = 0;
+ 
+    data.forEach((row) => {
+      if (row.scrap_quantity > 0) {
+        const reasonName = (row.scrap_reasons as { reason: string } | null)?.reason || "Tanımlanmamış";
+        totalScrapCount += row.scrap_quantity;
+        
+        if (reasonCounts[reasonName]) {
+          reasonCounts[reasonName].value += row.scrap_quantity;
+        } else {
+          reasonCounts[reasonName] = { name: reasonName, value: row.scrap_quantity };
+        }
+      }
+    });
+ 
+    const statsList = Object.values(reasonCounts).map((item) => ({
+      ...item,
+      percentage: totalScrapCount > 0 ? (item.value / totalScrapCount) * 100 : 0,
+    }));
+ 
+    return statsList.sort((a, b) => b.value - a.value);
+  }, [data]);
+ 
+  const topReason = scrapReasonStats[0] || null;
+  const COLORS = ["#f43f5e", "#fb923c", "#fbbf24", "#10b981", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899", "#94a3b8"];
 
   // Ortalama verim: sadece hesaplanabilenler
   const efficiencies = data
@@ -310,6 +350,93 @@ export default function ReportView() {
         </div>
       )}
 
+      {/* Hurda Sebebi Analiz Kartı */}
+      {fetched && data.length > 0 && totalScrap > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-rose-500" />
+                Hurda Sebebi Dağılım Grafiği
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[280px] flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={scrapReasonStats}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={85}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }: any) => `${name} (%${(percent * 100).toFixed(0)})`}
+                  >
+                    {scrapReasonStats.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip
+                    formatter={(value: any, name: any) => [`${value} adet`, name]}
+                    contentStyle={{ background: "rgba(255, 255, 255, 0.95)", border: "1px solid #e2e8f0", borderRadius: "8px" }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+ 
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold">
+                  Hurda Sebebi Dağılım Listesi
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="divide-y max-h-[190px] overflow-auto pr-1">
+                  {scrapReasonStats.map((stat, idx) => (
+                    <div key={stat.name} className="flex items-center justify-between py-2 text-sm">
+                      <div className="flex items-center gap-2 truncate">
+                        <span
+                          className="h-3 w-3 rounded-full shrink-0"
+                          style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                        />
+                        <span className="font-medium text-foreground truncate">{stat.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-semibold text-foreground">{stat.value}</span>
+                        <span className="text-xs text-muted-foreground ml-1.5">
+                          (%{stat.percentage.toFixed(1)})
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+ 
+            {topReason && (
+              <Card className="border-l-4 border-l-rose-500 bg-rose-500/5">
+                <CardContent className="pt-4 pb-4">
+                  <h4 className="font-semibold text-rose-700 text-sm flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+                    İyileştirme Fırsatı
+                  </h4>
+                  <p className="text-xs text-rose-600/90 mt-1.5 leading-relaxed">
+                    Belirlenen tarih aralığında en çok hurdaya sebep olan etken: 
+                    <strong className="font-bold underline mx-1">{topReason.name}</strong> 
+                    (%{topReason.percentage.toFixed(1)} oran ile {topReason.value} adet). 
+                    Bu alana odaklanarak firesiz üretim oranınızı ciddi ölçüde iyileştirebilirsiniz.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Veri Tablosu */}
       {fetched && (
         <Card>
@@ -329,6 +456,7 @@ export default function ReportView() {
                       <TableHead>Operatörler</TableHead>
                       <TableHead className="text-right">Sağlam</TableHead>
                       <TableHead className="text-right">Hurda</TableHead>
+                      <TableHead>Hurda Sebebi</TableHead>
                       <TableHead className="text-right">Toplam</TableHead>
                       <TableHead className="text-center">Beklenen</TableHead>
                       <TableHead className="text-center">
@@ -358,9 +486,12 @@ export default function ReportView() {
                           <TableCell className="max-w-[200px] truncate" title={operatorsStr}>
                             {operatorsStr}
                           </TableCell>
-                          <TableCell className="text-right">{row.good_quantity}</TableCell>
-                          <TableCell className="text-right">{row.scrap_quantity}</TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="text-right text-emerald-600 font-semibold">{row.good_quantity}</TableCell>
+                          <TableCell className="text-right text-red-600 font-semibold">{row.scrap_quantity}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm font-medium">
+                            {(row.scrap_reasons as { reason: string } | null)?.reason ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right font-bold">
                             {row.total_quantity}
                           </TableCell>
                           <TableCell className="text-center text-muted-foreground text-sm">

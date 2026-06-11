@@ -31,6 +31,12 @@ export interface Personnel {
   created_at: string;
 }
 
+export interface ScrapReason {
+  id: string;
+  reason: string;
+  created_at: string;
+}
+
 export interface ProductionLog {
   id: string;
   product_id: string;
@@ -38,6 +44,7 @@ export interface ProductionLog {
   date: string;
   good_quantity: number;
   scrap_quantity: number;
+  scrap_reason_id: string | null;
   total_quantity: number;
   start_time: string | null;  // "HH:MM:SS"
   end_time: string | null;    // "HH:MM:SS"
@@ -48,6 +55,7 @@ export interface ProductionLog {
 export interface ProductionLogWithRelations extends ProductionLog {
   products: Product;
   machines: Machine | null;
+  scrap_reasons: ScrapReason | null;
   production_log_operators?: {
     personnel: {
       id: string;
@@ -62,6 +70,7 @@ export interface ProductFormEntry {
   machine_id: string;
   good_quantity: number;
   scrap_quantity: number;
+  scrap_reason_id: string | null;
   cycle_time: number | null;   // saniye/parça (ürünün güncel değeri veya değiştirilmiş)
   start_time: string;          // "HH:MM"
   end_time: string;            // "HH:MM"

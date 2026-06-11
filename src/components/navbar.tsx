@@ -15,6 +15,7 @@ import {
   Users,
   LogOut,
   Briefcase,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/urunler", label: "Ürünler", icon: Package, adminOnly: false },
   { href: "/makineler", label: "Makineler", icon: Cog, adminOnly: false },
   { href: "/personel", label: "Personel", icon: Briefcase, adminOnly: false },
+  { href: "/hurda-sebepleri", label: "Hurda Sebepleri", icon: ShieldAlert, adminOnly: false },
   { href: "/kullanicilar", label: "Kullanıcılar", icon: Users, adminOnly: true },
 ];
 

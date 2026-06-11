@@ -1,17 +1,23 @@
-import { getProducts, getMachines, getCurrentProfile, getPersonnel } from "@/lib/actions";
+import { getProducts, getMachines, getCurrentProfile, getPersonnel, getScrapReasons } from "@/lib/actions";
 import ProductionForm from "@/components/production-form";
-import type { Product, Machine, Personnel } from "@/lib/types";
+import type { Product, Machine, Personnel, ScrapReason } from "@/lib/types";
 
 export default async function UretimPage() {
   let products: Product[] = [];
   let machines: Machine[] = [];
   let personnel: Personnel[] = [];
+  let scrapReasons: ScrapReason[] = [];
   let error: string | null = null;
   const profile = await getCurrentProfile();
   const isAdmin = profile?.role === "admin";
 
   try {
-    [products, machines, personnel] = await Promise.all([getProducts(), getMachines(), getPersonnel()]);
+    [products, machines, personnel, scrapReasons] = await Promise.all([
+      getProducts(),
+      getMachines(),
+      getPersonnel(),
+      getScrapReasons(),
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : "Veri yüklenirken hata oluştu.";
   }
@@ -53,7 +59,7 @@ export default async function UretimPage() {
           Günlük üretim verilerini süreç bazlı kaydedin.
         </p>
       </div>
-      <ProductionForm products={products} machines={machines} personnel={personnel} />
+      <ProductionForm products={products} machines={machines} personnel={personnel} scrapReasons={scrapReasons} />
     </div>
   );
 }

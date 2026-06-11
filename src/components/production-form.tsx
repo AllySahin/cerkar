@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { type ProductFormEntry, type Product, type Machine, type Personnel } from "@/lib/types";
+import { type ProductFormEntry, type Product, type Machine, type Personnel, type ScrapReason } from "@/lib/types";
 import { saveProductionLogs } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ interface ProductionFormProps {
   products: Product[];
   machines: Machine[];
   personnel: Personnel[];
+  scrapReasons: ScrapReason[];
 }
 
 // Saat stringini dakikaya çevir ("HH:MM" → dakika)
@@ -113,7 +114,7 @@ function EfficiencyBadge({
   );
 }
 
-export default function ProductionForm({ products, machines, personnel }: ProductionFormProps) {
+export default function ProductionForm({ products, machines, personnel, scrapReasons }: ProductionFormProps) {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [entries, setEntries] = useState<ProductFormEntry[]>([
     {
@@ -121,6 +122,7 @@ export default function ProductionForm({ products, machines, personnel }: Produc
       machine_id: "",
       good_quantity: 0,
       scrap_quantity: 0,
+      scrap_reason_id: "",
       cycle_time: null,
       start_time: "08:00",
       end_time: "18:00",
@@ -161,6 +163,7 @@ export default function ProductionForm({ products, machines, personnel }: Produc
         machine_id: "",
         good_quantity: 0,
         scrap_quantity: 0,
+        scrap_reason_id: "",
         cycle_time: null,
         start_time: "08:00",
         end_time: "18:00",
@@ -209,6 +212,14 @@ export default function ProductionForm({ products, machines, personnel }: Produc
       return;
     }
 
+    const scrapWithoutReason = entries.filter(
+      (e) => e.product_id && (Number(e.scrap_quantity) || 0) > 0 && !e.scrap_reason_id
+    );
+    if (scrapWithoutReason.length > 0) {
+      toast.error("Hurda adedi girilen ürünlerde hurda sebebi seçilmelidir.");
+      return;
+    }
+
     const noDataEntries = entries.filter(
       (e) => e.good_quantity === 0 && e.scrap_quantity === 0
     );
@@ -227,6 +238,7 @@ export default function ProductionForm({ products, machines, personnel }: Produc
           machine_id: "",
           good_quantity: 0,
           scrap_quantity: 0,
+          scrap_reason_id: "",
           cycle_time: null,
           start_time: "08:00",
           end_time: "18:00",
@@ -476,6 +488,28 @@ export default function ProductionForm({ products, machines, personnel }: Produc
                   </div>
                 </div>
               </div>
+ 
+              {/* Hurda Sebebi (Sadece Hurda Adet > 0 ise gösterilir) */}
+              {entry.scrap_quantity > 0 && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <Label className="text-red-500 font-semibold">Hurda Sebebi</Label>
+                  <Select
+                    value={entry.scrap_reason_id || ""}
+                    onValueChange={(val) => updateEntry(entryIndex, "scrap_reason_id", val)}
+                  >
+                    <SelectTrigger className="w-full border-red-200 focus:border-red-500">
+                      <SelectValue placeholder="Hurda sebebi seçin..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {scrapReasons.map((reason) => (
+                        <SelectItem key={reason.id} value={reason.id}>
+                          {reason.reason}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Verim Göstergesi */}
               <EfficiencyBadge efficiency={efficiency} />

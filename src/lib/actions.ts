@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ProductFormEntry, Profile, UserRole } from "@/lib/types";
+import type { ProductFormEntry, Profile, UserRole, ScrapReason } from "@/lib/types";
 import {
   hashPassword,
   setSession,
@@ -328,16 +328,20 @@ export async function saveProductionLogs(
 
   const rows = entries
     .filter((e) => (Number(e.good_quantity) || 0) > 0 || (Number(e.scrap_quantity) || 0) > 0)
-    .map((e) => ({
-      product_id: e.product_id,
-      machine_id: e.machine_id || null,
-      date,
-      good_quantity: Number(e.good_quantity) || 0,
-      scrap_quantity: Number(e.scrap_quantity) || 0,
-      start_time: e.start_time || "08:00",
-      end_time: e.end_time || "18:00",
-      break_duration: Number(e.break_duration) || 0,
-    }));
+    .map((e) => {
+      const scrapQty = Number(e.scrap_quantity) || 0;
+      return {
+        product_id: e.product_id,
+        machine_id: e.machine_id || null,
+        date,
+        good_quantity: Number(e.good_quantity) || 0,
+        scrap_quantity: scrapQty,
+        scrap_reason_id: scrapQty > 0 ? (e.scrap_reason_id || null) : null,
+        start_time: e.start_time || "08:00",
+        end_time: e.end_time || "18:00",
+        break_duration: Number(e.break_duration) || 0,
+      };
+    });
 
   if (rows.length === 0) {
     throw new Error("En az bir kayıt için miktar girilmelidir.");
@@ -427,13 +431,18 @@ export async function updateProductionLog(
     machine_id?: string | null;
     good_quantity?: number;
     scrap_quantity?: number;
+    scrap_reason_id?: string | null;
     date?: string;
     personnel_ids?: string[];
   }
 ) {
   await requireRole("admin");
   const supabase = await createClient();
-  const { personnel_ids, ...logData } = data;
+  let { personnel_ids, ...logData } = data;
+
+  if (logData.scrap_quantity === 0) {
+    logData.scrap_reason_id = null;
+  }
 
   if (Object.keys(logData).length > 0) {
     const { error } = await supabase
@@ -543,7 +552,7 @@ export async function getDashboardData(date: string) {
 
   const { data: logs, error } = await supabase
     .from("production_logs")
-    .select("*, products(id, name), machines(id, name), production_log_operators(personnel(id, name))")
+    .select("*, products(id, name), machines(id, name), scrap_reasons(id, reason), production_log_operators(personnel(id, name))")
     .eq("date", date)
     .order("created_at");
 
@@ -585,7 +594,7 @@ export async function getHistoricalLogs(limit = 100) {
 
   const { data, error } = await supabase
     .from("production_logs")
-    .select("*, products(id, name), machines(id, name), production_log_operators(personnel(id, name))")
+    .select("*, products(id, name), machines(id, name), scrap_reasons(id, reason), production_log_operators(personnel(id, name))")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -603,7 +612,7 @@ export async function getReportData(startDate: string, endDate: string) {
 
   const { data, error } = await supabase
     .from("production_logs")
-    .select("*, products(id, name, cycle_time), machines(id, name), production_log_operators(personnel(id, name))")
+    .select("*, products(id, name, cycle_time), machines(id, name), scrap_reasons(id, reason), production_log_operators(personnel(id, name))")
     .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: true })
@@ -669,6 +678,69 @@ export async function deletePersonnel(id: string) {
   const { error } = await supabase.from("personnel").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/personel");
+}
+
+// ============================================
+// Hurda Sebepleri İşlemleri
+// ============================================
+
+export async function getScrapReasons(): Promise<ScrapReason[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("scrap_reasons")
+      .select("*")
+      .order("reason");
+
+    if (error) {
+      console.error("[DB] getScrapReasons error:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("[DB] getScrapReasons exception:", err);
+    return [];
+  }
+}
+
+export async function createScrapReason(reason: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("scrap_reasons")
+    .insert({ reason: reason.trim() })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/hurda-sebepleri");
+  revalidatePath("/uretim");
+  return data;
+}
+
+export async function updateScrapReason(id: string, reason: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("scrap_reasons")
+    .update({ reason: reason.trim() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/hurda-sebepleri");
+  revalidatePath("/uretim");
+  revalidatePath("/gecmis");
+  revalidatePath("/rapor");
+}
+
+export async function deleteScrapReason(id: string) {
+  await requireRole("admin");
+  const supabase = await createClient();
+  const { error } = await supabase.from("scrap_reasons").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/hurda-sebepleri");
+  revalidatePath("/uretim");
+  revalidatePath("/gecmis");
+  revalidatePath("/rapor");
 }
 
 // ============================================
