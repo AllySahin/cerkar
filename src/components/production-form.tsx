@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -132,6 +133,17 @@ export default function ProductionForm({ products, machines, personnel }: Produc
   // Ürün ID'den cycle_time al
   const productMap = useMemo(
     () => new Map(products.map((p) => [p.id, p])),
+    [products]
+  );
+
+  // Combobox için ürün listesini formatla
+  const productComboboxItems = useMemo(
+    () =>
+      products.map((p) => ({
+        value: p.id,
+        label: p.name,
+        secondaryLabel: p.cycle_time != null ? `(${p.cycle_time} sn)` : undefined,
+      })),
     [products]
   );
 
@@ -295,26 +307,14 @@ export default function ProductionForm({ products, machines, personnel }: Produc
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Ürün</Label>
-                  <Select
+                  <Combobox
                     value={entry.product_id}
-                    onValueChange={(val) => handleProductChange(entryIndex, val ?? "")}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Ürün seçin..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name}
-                          {product.cycle_time != null && (
-                            <span className="ml-2 text-muted-foreground text-xs">
-                              ({product.cycle_time} sn)
-                            </span>
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(val) => handleProductChange(entryIndex, val)}
+                    items={productComboboxItems}
+                    placeholder="Ürün seçin..."
+                    searchPlaceholder="Ürün adı ara..."
+                    emptyText="Ürün bulunamadı."
+                  />
                 </div>
 
                 <div className="space-y-2">
