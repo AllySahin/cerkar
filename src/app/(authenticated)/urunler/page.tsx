@@ -1,10 +1,7 @@
 import { getProducts, getCurrentProfile } from "@/lib/actions";
 import type { Product } from "@/lib/types";
 import AddProductDialog from "@/components/add-product-dialog";
-import DeleteProductButton from "@/components/delete-product-button";
-import EditProductButton from "@/components/edit-product-button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package } from "lucide-react";
+import ProductsList from "@/components/products-list";
 
 export default async function UrunlerPage() {
   let products: Product[] = [];
@@ -34,55 +31,8 @@ export default async function UrunlerPage() {
         <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-6 text-center">
           <p className="text-destructive font-medium">{error}</p>
         </div>
-      ) : products.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="h-12 w-12 text-muted-foreground/40" />
-            <p className="mt-4 text-muted-foreground">
-              Henüz ürün eklenmemiş. Yukarıdaki butonu kullanarak yeni ürün ekleyin.
-            </p>
-          </CardContent>
-        </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Kayıtlı Ürünler ({products.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y">
-              {products.map((product) => (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between py-3"
-                >
-                  <div>
-                    <p className="font-medium">{product.name}</p>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      {product.cycle_time != null ? (
-                        <p className="text-xs text-muted-foreground">
-                          ⏱ Çevrim: <span className="font-medium text-foreground">{product.cycle_time} sn/parça</span>
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">Çevrim süresi girilmemiş</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Eklenme: {new Date(product.created_at).toLocaleDateString("tr-TR")}
-                      </p>
-                    </div>
-                  </div>
-                  {isAdmin && (
-                    <div className="flex items-center gap-1">
-                      <EditProductButton id={product.id} name={product.name} cycleTime={product.cycle_time} />
-                      <DeleteProductButton id={product.id} name={product.name} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <ProductsList initialProducts={products} isAdmin={isAdmin} />
       )}
     </div>
   );
