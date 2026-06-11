@@ -26,10 +26,40 @@ export default async function MakinelerPage({
       : null;
 
   function factoryColor(eff: number | null) {
-    if (eff === null) return { text: "text-zinc-400", ring: "ring-zinc-700", bg: "bg-zinc-900" };
-    if (eff >= 90) return { text: "text-emerald-400", ring: "ring-emerald-700/60", bg: "bg-emerald-950/60" };
-    if (eff >= 70) return { text: "text-amber-400", ring: "ring-amber-700/60", bg: "bg-amber-950/60" };
-    return { text: "text-red-400", ring: "ring-red-700/60", bg: "bg-red-950/60" };
+    if (eff === null) {
+      return {
+        text: "text-zinc-600 dark:text-zinc-400",
+        ring: "ring-zinc-200 dark:ring-zinc-800",
+        bg: "bg-zinc-50/80 dark:bg-zinc-900/40",
+        iconBg: "bg-zinc-100 dark:bg-zinc-800",
+        iconText: "text-zinc-600 dark:text-zinc-400"
+      };
+    }
+    if (eff >= 90) {
+      return {
+        text: "text-emerald-700 dark:text-emerald-400",
+        ring: "ring-emerald-200/60 dark:ring-emerald-800/30",
+        bg: "bg-emerald-50/80 dark:bg-emerald-950/40",
+        iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
+        iconText: "text-emerald-700 dark:text-emerald-400"
+      };
+    }
+    if (eff >= 70) {
+      return {
+        text: "text-amber-700 dark:text-amber-400",
+        ring: "ring-amber-200/60 dark:ring-amber-800/30",
+        bg: "bg-amber-50/80 dark:bg-amber-950/40",
+        iconBg: "bg-amber-100 dark:bg-amber-900/50",
+        iconText: "text-amber-700 dark:text-amber-400"
+      };
+    }
+    return {
+      text: "text-red-700 dark:text-red-400",
+      ring: "ring-red-200/60 dark:ring-red-800/30",
+      bg: "bg-red-50/80 dark:bg-red-950/40",
+      iconBg: "bg-red-100 dark:bg-red-900/50",
+      iconText: "text-red-700 dark:text-red-400"
+    };
   }
 
   const fc = factoryColor(factoryEfficiency);
@@ -53,16 +83,16 @@ export default async function MakinelerPage({
       {/* Fabrika Verimi Banner */}
       <div
         className={`
-          rounded-2xl border ring-1 p-6 flex items-center gap-6
+          rounded-2xl ring-1 p-6 flex items-center gap-6
           ${fc.bg} ${fc.ring}
           relative overflow-hidden
         `}
       >
         {/* Decorative blur */}
-        <div className={`absolute -right-8 -top-8 w-40 h-40 rounded-full blur-3xl opacity-20 ${fc.text}`} />
+        <div className={`absolute -right-8 -top-8 w-40 h-40 rounded-full blur-3xl opacity-20 ${fc.text.replace("text-", "bg-")}`} />
 
-        <div className={`p-3 rounded-xl ring-1 ${fc.ring} bg-black/20`}>
-          <Factory className={`w-7 h-7 ${fc.text}`} />
+        <div className={`p-3 rounded-xl ring-1 ${fc.ring} ${fc.iconBg}`}>
+          <Factory className={`w-7 h-7 ${fc.iconText}`} />
         </div>
 
         <div className="flex-1">
@@ -80,14 +110,14 @@ export default async function MakinelerPage({
         {/* Gauge bar */}
         {factoryEfficiency !== null && (
           <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
-            <div className="w-48 h-3 rounded-full bg-black/30 overflow-hidden">
+            <div className="w-48 h-3 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
                   factoryEfficiency >= 90
-                    ? "bg-emerald-400"
+                    ? "bg-emerald-500 dark:bg-emerald-400"
                     : factoryEfficiency >= 70
-                    ? "bg-amber-400"
-                    : "bg-red-400"
+                    ? "bg-amber-500 dark:bg-amber-400"
+                    : "bg-red-500 dark:bg-red-400"
                 }`}
                 style={{ width: `${Math.min(factoryEfficiency, 100)}%` }}
               />
@@ -101,10 +131,10 @@ export default async function MakinelerPage({
 
       {/* Machine Grid */}
       {machines.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/30 flex flex-col items-center justify-center py-16 text-center">
-          <Cog className="w-12 h-12 text-zinc-600 mb-4" />
-          <p className="text-zinc-400 font-medium">Henüz makine eklenmemiş.</p>
-          <p className="text-zinc-600 text-sm mt-1">
+        <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/20 flex flex-col items-center justify-center py-16 text-center">
+          <Cog className="w-12 h-12 text-zinc-400 dark:text-zinc-600 mb-4" />
+          <p className="text-zinc-700 dark:text-zinc-300 font-medium">Henüz makine eklenmemiş.</p>
+          <p className="text-zinc-500 dark:text-zinc-500 text-sm mt-1">
             Yukarıdaki butonu kullanarak yeni makine ekleyin.
           </p>
         </div>

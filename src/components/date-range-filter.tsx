@@ -90,47 +90,81 @@ export default function DateRangeFilter() {
     handleFilter(s, e);
   };
 
+  const todayStr = formatDate(new Date());
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = formatDate(yesterday);
+
+  const getThisWeekStart = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+    return formatDate(monday);
+  };
+
+  const get30DaysAgoStart = () => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 86400000);
+    return formatDate(thirtyDaysAgo);
+  };
+
+  const isTodayActive = start === todayStr && end === todayStr;
+  const isYesterdayActive = start === yesterdayStr && end === yesterdayStr;
+  const isThisWeekActive = start === getThisWeekStart() && end === todayStr;
+  const isLast30Active = start === get30DaysAgoStart() && end === todayStr;
+  const isAllActive = !start && !end;
+
+  const getPresetClass = (isActive: boolean) => {
+    return `px-3 py-1 text-xs rounded-full border transition-all ${
+      isActive
+        ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-300 dark:border-zinc-700 font-semibold shadow-xs"
+        : "bg-zinc-50 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-900/60"
+    }`;
+  };
+
   return (
-    <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-md space-y-4">
-      <div className="flex items-center gap-2 text-white/95">
-        <CalendarRange className="w-5 h-5 text-emerald-400" />
+    <div className="bg-card text-card-foreground border border-border rounded-2xl p-5 shadow-xs space-y-4">
+      <div className="flex items-center gap-2 text-foreground">
+        <CalendarRange className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
         <h2 className="text-sm font-semibold tracking-wide">Tarih Aralığı Filtresi</h2>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:items-end gap-4">
         <div className="space-y-1.5 flex-1 min-w-[140px]">
-          <Label htmlFor="start-date" className="text-xs text-zinc-400 font-medium">Başlangıç Tarihi</Label>
+          <Label htmlFor="start-date" className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Başlangıç Tarihi</Label>
           <Input
             id="start-date"
             type="date"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className="bg-zinc-950/50 border-zinc-800 text-white placeholder-zinc-500 focus-visible:ring-emerald-500/30"
+            className="focus-visible:ring-primary/30"
           />
         </div>
 
         <div className="space-y-1.5 flex-1 min-w-[140px]">
-          <Label htmlFor="end-date" className="text-xs text-zinc-400 font-medium">Bitiş Tarihi</Label>
+          <Label htmlFor="end-date" className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Bitiş Tarihi</Label>
           <Input
             id="end-date"
             type="date"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="bg-zinc-950/50 border-zinc-800 text-white placeholder-zinc-500 focus-visible:ring-emerald-500/30"
+            className="focus-visible:ring-primary/30"
           />
         </div>
 
         <div className="flex items-center gap-2 md:self-end shrink-0 w-full md:w-auto">
           <Button
             onClick={() => handleFilter()}
-            className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold flex-1 md:flex-initial shadow-md shadow-emerald-500/10"
+            className="font-bold flex-1 md:flex-initial shadow-xs"
           >
             Filtrele
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={handleReset}
-            className="border border-zinc-800 hover:bg-zinc-800/60 text-zinc-400 hover:text-white"
+            className="text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100"
             size="icon"
             title="Filtreyi Temizle"
           >
@@ -140,45 +174,35 @@ export default function DateRangeFilter() {
       </div>
 
       {/* Preset Badges */}
-      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800/40">
-        <span className="text-xs text-zinc-500 font-medium mr-1">Hızlı Seçim:</span>
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+        <span className="text-xs text-zinc-400 dark:text-zinc-500 font-medium mr-1">Hızlı Seçim:</span>
         <button
           onClick={() => setPreset("today")}
-          className={`px-3 py-1 text-xs rounded-full border transition-all ${
-            start === formatDate(new Date()) && end === formatDate(new Date())
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-              : "bg-zinc-950/30 text-zinc-400 border-zinc-800 hover:border-zinc-700"
-          }`}
+          className={getPresetClass(isTodayActive)}
         >
           Bugün
         </button>
         <button
           onClick={() => setPreset("yesterday")}
-          className="px-3 py-1 text-xs rounded-full border bg-zinc-950/30 text-zinc-400 border-zinc-800 hover:border-zinc-700 transition-all"
+          className={getPresetClass(isYesterdayActive)}
         >
           Dün
         </button>
         <button
           onClick={() => setPreset("thisWeek")}
-          className="px-3 py-1 text-xs rounded-full border bg-zinc-950/30 text-zinc-400 border-zinc-800 hover:border-zinc-700 transition-all"
+          className={getPresetClass(isThisWeekActive)}
         >
           Bu Hafta
         </button>
         <button
           onClick={() => setPreset("last30")}
-          className={`px-3 py-1 text-xs rounded-full border transition-all ${
-            start && !end ? "bg-zinc-950/30 text-zinc-400 border-zinc-800" : ""
-          }`}
+          className={getPresetClass(isLast30Active)}
         >
           Son 30 Gün
         </button>
         <button
           onClick={() => setPreset("all")}
-          className={`px-3 py-1 text-xs rounded-full border transition-all ${
-            !start && !end
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-              : "bg-zinc-950/30 text-zinc-400 border-zinc-800 hover:border-zinc-700"
-          }`}
+          className={getPresetClass(isAllActive)}
         >
           Tüm Zamanlar
         </button>
