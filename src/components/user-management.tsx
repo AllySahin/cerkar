@@ -160,7 +160,14 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
               </div>
               <div className="space-y-2">
                 <Label>Yetki Seviyesi</Label>
-                <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+                <Select
+                  value={role}
+                  onValueChange={(v) => setRole(v as UserRole)}
+                  items={[
+                    { value: "admin", label: "Admin" },
+                    { value: "user", label: "Kullanıcı" },
+                  ]}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -222,6 +229,10 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                           value={profile.role}
                           onValueChange={(v) => handleRoleChange(profile.id, v as UserRole)}
                           disabled={updatingId === profile.id}
+                          items={[
+                            { value: "admin", label: "Admin" },
+                            { value: "user", label: "Kullanıcı" },
+                          ]}
                         >
                           <SelectTrigger className="w-36">
                             <SelectValue />

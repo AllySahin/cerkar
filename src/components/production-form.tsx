@@ -334,6 +334,7 @@ export default function ProductionForm({ products, machines, personnel, scrapRea
                   <Select
                     value={entry.machine_id}
                     onValueChange={(val) => updateEntry(entryIndex, "machine_id", val ?? "")}
+                    items={machines.map((machine) => ({ value: machine.id, label: machine.name }))}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Makine seçin..." />
@@ -496,6 +497,7 @@ export default function ProductionForm({ products, machines, personnel, scrapRea
                   <Select
                     value={entry.scrap_reason_id || ""}
                     onValueChange={(val) => updateEntry(entryIndex, "scrap_reason_id", val)}
+                    items={scrapReasons.map((reason) => ({ value: reason.id, label: reason.reason }))}
                   >
                     <SelectTrigger className="w-full border-red-200 focus:border-red-500">
                       <SelectValue placeholder="Hurda sebebi seçin..." />

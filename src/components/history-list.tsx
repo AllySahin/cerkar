@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import { History, Search, Pencil, Trash2, Loader2, Users } from "lucide-react";
 import { updateProductionLog, deleteProductionLog } from "@/lib/actions";
-import { type Personnel, type ScrapReason } from "@/lib/types";
+import { type Personnel, type ScrapReason, type Machine } from "@/lib/types";
 import { toast } from "sonner";
 
 interface LogEntry {
@@ -61,9 +61,10 @@ interface HistoryListProps {
   isAdmin?: boolean;
   personnel?: Personnel[];
   scrapReasons?: ScrapReason[];
+  machines?: Machine[];
 }
 
-export default function HistoryList({ initialLogs, isAdmin, personnel = [], scrapReasons = [] }: HistoryListProps) {
+export default function HistoryList({ initialLogs, isAdmin, personnel = [], scrapReasons = [], machines = [] }: HistoryListProps) {
   const [search, setSearch] = useState("");
   const [editLog, setEditLog] = useState<LogEntry | null>(null);
   const [editGood, setEditGood] = useState(0);
@@ -71,6 +72,7 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [], scra
   const [editScrapReasonId, setEditScrapReasonId] = useState<string>("");
   const [editDate, setEditDate] = useState("");
   const [editPersonnelIds, setEditPersonnelIds] = useState<string[]>([]);
+  const [editMachineId, setEditMachineId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -117,6 +119,7 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [], scra
     setEditScrap(log.scrap_quantity);
     setEditScrapReasonId(log.scrap_reason_id || "");
     setEditDate(log.date);
+    setEditMachineId(log.machine_id || "");
     setEditPersonnelIds(
       log.production_log_operators
         ?.map((op) => op.personnel?.id)
@@ -141,6 +144,7 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [], scra
         scrap_reason_id: editScrap > 0 ? editScrapReasonId : null,
         date: editDate,
         personnel_ids: editPersonnelIds,
+        machine_id: editMachineId || null,
       });
       toast.success("Kayıt güncellendi.");
       setEditLog(null);
@@ -316,10 +320,7 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [], scra
           {editLog && (
             <form onSubmit={handleUpdate} className="space-y-4">
               <div className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{editLog.products?.name}</span>
-                {editLog.machines?.name && (
-                  <span> — {editLog.machines.name}</span>
-                )}
+                Ürün: <span className="font-medium text-foreground">{editLog.products?.name}</span>
               </div>
               
               <div className="space-y-2">
@@ -330,6 +331,26 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [], scra
                   value={editDate}
                   onChange={(e) => setEditDate(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-machine">Makine (Opsiyonel)</Label>
+                <Select
+                  value={editMachineId}
+                  onValueChange={(val) => setEditMachineId(val ?? "")}
+                  items={machines.map((machine) => ({ value: machine.id, label: machine.name }))}
+                >
+                  <SelectTrigger id="edit-machine" className="w-full">
+                    <SelectValue placeholder="Makine seçin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {machines.map((machine) => (
+                      <SelectItem key={machine.id} value={machine.id}>
+                        {machine.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -366,6 +387,7 @@ export default function HistoryList({ initialLogs, isAdmin, personnel = [], scra
                   <Select
                     value={editScrapReasonId || ""}
                     onValueChange={(val) => setEditScrapReasonId(val || "")}
+                    items={scrapReasons.map((reason) => ({ value: reason.id, label: reason.reason }))}
                   >
                     <SelectTrigger id="edit-scrap-reason" className="w-full border-red-200 focus:border-red-500">
                       <SelectValue placeholder="Hurda sebebi seçin..." />
