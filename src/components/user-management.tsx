@@ -134,44 +134,6 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
 
   return (
     <div className="space-y-6">
-      {/* Üst Bar: Kendi 2FA Durumu ve Yeni Kullanıcı Ekleme */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-muted/30 p-4 rounded-lg border">
-        <div>
-          <h3 className="text-sm font-semibold flex items-center gap-1.5">
-            <KeyRound className="h-4 w-4 text-primary" />
-            İki Faktörlü Kimlik Doğrulama (2FA) Güvenliği
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Google Authenticator uygulaması ile hesabınızın güvenliğini artırın.
-          </p>
-        </div>
-        <div>
-          {currentProfile?.is_totp_enabled ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive hover:bg-destructive/10 border-destructive/30 gap-1.5"
-              onClick={() => handleDisableTotp(currentUserId)}
-              disabled={disablingTotpId === currentUserId}
-            >
-              {disablingTotpId === currentUserId ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ShieldAlert className="h-3.5 w-3.5" />
-              )}
-              2FA Devre Dışı Bırak
-            </Button>
-          ) : (
-            <TotpSetupModal>
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
-                <ShieldCheck className="h-4 w-4" />
-                2FA Aktifleştir
-              </Button>
-            </TotpSetupModal>
-          )}
-        </div>
-      </div>
-
       {/* Kullanıcı Ekle Butonu ve Diyaloğu */}
       <div className="flex justify-end">
         <Dialog open={open} onOpenChange={setOpen}>
@@ -258,7 +220,6 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                   <TableHead>Ad Soyad</TableHead>
                   <TableHead>Kullanıcı Adı</TableHead>
                   <TableHead>Yetki</TableHead>
-                  <TableHead>2FA Güvenliği</TableHead>
                   <TableHead>Kayıt Tarihi</TableHead>
                   <TableHead className="text-right">İşlemler</TableHead>
                 </TableRow>
@@ -302,17 +263,6 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                             <SelectItem value="user">Kullanıcı</SelectItem>
                           </SelectContent>
                         </Select>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {profile.is_totp_enabled ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white gap-1">
-                          <ShieldCheck className="h-3 w-3" /> Aktif
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground gap-1">
-                          <ShieldAlert className="h-3 w-3" /> Pasif
-                        </Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
