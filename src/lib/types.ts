@@ -10,7 +10,10 @@ export interface Profile {
   full_name: string | null;
   role: UserRole;
   created_at: string;
+  totp_secret?: string | null;
+  is_totp_enabled?: boolean;
 }
+
 
 export interface Product {
   id: string;

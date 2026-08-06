@@ -9,6 +9,7 @@ import {
   getSessionUserId,
   clearSession,
 } from "@/lib/auth";
+import { generateTotpSetup, verifyTotpToken } from "@/lib/totp";
 
 // ============================================
 // Yetkilendirme Yardımcıları
@@ -18,17 +19,6 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   try {
     const userId = await getSessionUserId();
     if (!userId) return null;
-
-    // Fallback admin user
-    if (userId === "admin-fallback-user-id") {
-      return {
-        id: userId,
-        username: "admin",
-        full_name: "Admin",
-        role: "admin",
-        created_at: new Date().toISOString(),
-      };
-    }
 
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -62,22 +52,12 @@ async function requireRole(role: UserRole) {
 // Oturum İşlemleri
 // ============================================
 
-export async function signIn(username: string, password: string) {
-  try {
-    // Fallback: Hardcoded admin user (development)
-    if (username === "admin" && password === "admin") {
-      console.log("[AUTH] Using fallback admin user");
-      const adminProfile: Profile = {
-        id: "admin-fallback-user-id",
-        username: "admin",
-        full_name: "Admin",
-        role: "admin",
-        created_at: new Date().toISOString(),
-      };
-      await setSession(adminProfile.id);
-      return adminProfile;
-    }
+export type SignInResult =
+  | { require2FA: false; profile: Profile }
+  | { require2FA: true; userId: string; username: string };
 
+export async function signIn(username: string, password: string): Promise<SignInResult> {
+  try {
     const supabase = await createClient();
     const hash = await hashPassword(password);
 
@@ -88,33 +68,118 @@ export async function signIn(username: string, password: string) {
       .eq("password_hash", hash)
       .single();
 
-    if (error) {
-      console.error("[AUTH] Supabase error:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
+    if (error || !data) {
+      console.error("[AUTH] Supabase error or user not found:", error);
       throw new Error("Kullanıcı adı veya şifre hatalı.");
     }
 
-    if (!data) {
-      console.warn("[AUTH] User not found:", username);
-      throw new Error("Kullanıcı adı veya şifre hatalı.");
+    if (data.is_totp_enabled && data.totp_secret) {
+      return {
+        require2FA: true,
+        userId: data.id,
+        username: data.username,
+      };
     }
 
     await setSession(data.id);
-    return data as Profile;
+    return {
+      require2FA: false,
+      profile: data as Profile,
+    };
   } catch (err) {
     console.error("[AUTH] SignIn error:", err);
     throw err;
   }
 }
 
+export async function verify2FALogin(userId: string, code: string) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (error || !data || !data.is_totp_enabled || !data.totp_secret) {
+      throw new Error("Geçersiz kullanıcı veya 2FA aktif değil.");
+    }
+
+    const isValid = verifyTotpToken(code, data.totp_secret);
+    if (!isValid) {
+      throw new Error("Girdiğiniz 2FA kodu hatalı veya süresi dolmuş.");
+    }
+
+    await setSession(data.id);
+    return data as Profile;
+  } catch (err) {
+    console.error("[AUTH] verify2FALogin error:", err);
+    throw err;
+  }
+}
+
+export async function setupTotp() {
+  const profile = await getCurrentProfile();
+  if (!profile) throw new Error("Oturum açmanız gerekiyor.");
+
+  return await generateTotpSetup(profile.username);
+}
+
+export async function confirmEnableTotp(secret: string, code: string) {
+  const profile = await getCurrentProfile();
+  if (!profile) throw new Error("Oturum açmanız gerekiyor.");
+
+  const isValid = verifyTotpToken(code, secret);
+  if (!isValid) {
+    throw new Error("Doğrulama kodu hatalı. Lütfen Google Authenticator uygulamanızdaki kodu kontrol edin.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      totp_secret: secret,
+      is_totp_enabled: true,
+    })
+    .eq("id", profile.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/kullanicilar");
+  return { success: true };
+}
+
+export async function disableTotp(targetUserId?: string) {
+  const currentProfile = await getCurrentProfile();
+  if (!currentProfile) throw new Error("Oturum açmanız gerekiyor.");
+
+  const userIdToDisable = targetUserId || currentProfile.id;
+  if (targetUserId && targetUserId !== currentProfile.id) {
+    if (currentProfile.role !== "admin") {
+      throw new Error("Başka bir kullanıcının 2FA özelliğini devre dışı bırakmak için admin yetkisi gerekir.");
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      totp_secret: null,
+      is_totp_enabled: false,
+    })
+    .eq("id", userIdToDisable);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/kullanicilar");
+  return { success: true };
+}
+
 export async function signOut() {
   await clearSession();
   revalidatePath("/", "layout");
 }
+
 
 // ============================================
 // Kullanıcı Yönetimi (Sadece Admin)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createUser, updateUserRole, deleteUser } from "@/lib/actions";
+import { createUser, updateUserRole, deleteUser, disableTotp } from "@/lib/actions";
 import type { Profile, UserRole } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,9 +30,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Trash2, Loader2, Shield, User } from "lucide-react";
+import { UserPlus, Trash2, Loader2, Shield, User, ShieldCheck, ShieldAlert, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import TotpSetupModal from "@/components/totp-setup-modal";
 
 interface UserManagementProps {
   profiles: Profile[];
@@ -49,6 +50,9 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [disablingTotpId, setDisablingTotpId] = useState<string | null>(null);
+
+  const currentProfile = profiles.find((p) => p.id === currentUserId);
 
   const handleCreate = async () => {
     if (!username || !password) {
@@ -111,9 +115,64 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
     }
   };
 
+  const handleDisableTotp = async (userId: string) => {
+    if (!confirm("Bu hesabın Google Authenticator (2FA) korumasını kaldırmak istediğinize emin misiniz?")) return;
+
+    setDisablingTotpId(userId);
+    try {
+      await disableTotp(userId);
+      toast.success("2FA koruması kaldırıldı.");
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "2FA kaldırılamadı."
+      );
+    } finally {
+      setDisablingTotpId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Kullanıcı Ekle */}
+      {/* Üst Bar: Kendi 2FA Durumu ve Yeni Kullanıcı Ekleme */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-muted/30 p-4 rounded-lg border">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <KeyRound className="h-4 w-4 text-primary" />
+            İki Faktörlü Kimlik Doğrulama (2FA) Güvenliği
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Google Authenticator uygulaması ile hesabınızın güvenliğini artırın.
+          </p>
+        </div>
+        <div>
+          {currentProfile?.is_totp_enabled ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 border-destructive/30 gap-1.5"
+              onClick={() => handleDisableTotp(currentUserId)}
+              disabled={disablingTotpId === currentUserId}
+            >
+              {disablingTotpId === currentUserId ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ShieldAlert className="h-3.5 w-3.5" />
+              )}
+              2FA Devre Dışı Bırak
+            </Button>
+          ) : (
+            <TotpSetupModal>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
+                <ShieldCheck className="h-4 w-4" />
+                2FA Aktifleştir
+              </Button>
+            </TotpSetupModal>
+          )}
+        </div>
+      </div>
+
+      {/* Kullanıcı Ekle Butonu ve Diyaloğu */}
       <div className="flex justify-end">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
@@ -199,6 +258,7 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                   <TableHead>Ad Soyad</TableHead>
                   <TableHead>Kullanıcı Adı</TableHead>
                   <TableHead>Yetki</TableHead>
+                  <TableHead>2FA Güvenliği</TableHead>
                   <TableHead>Kayıt Tarihi</TableHead>
                   <TableHead className="text-right">İşlemler</TableHead>
                 </TableRow>
@@ -244,25 +304,56 @@ export default function UserManagement({ profiles, currentUserId }: UserManageme
                         </Select>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {profile.is_totp_enabled ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white gap-1">
+                          <ShieldCheck className="h-3 w-3" /> Aktif
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground gap-1">
+                          <ShieldAlert className="h-3 w-3" /> Pasif
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(profile.created_at).toLocaleDateString("tr-TR")}
                     </TableCell>
                     <TableCell className="text-right">
-                      {profile.id !== currentUserId && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(profile.id)}
-                          disabled={deletingId === profile.id}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          {deletingId === profile.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Admin, 2FA kilitlenmiş diğer kullanıcıların 2FA'sını kaldırabilir */}
+                        {profile.is_totp_enabled && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="2FA Korumasını Kaldır"
+                            onClick={() => handleDisableTotp(profile.id)}
+                            disabled={disablingTotpId === profile.id}
+                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                          >
+                            {disablingTotpId === profile.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <ShieldAlert className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                        {profile.id !== currentUserId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Kullanıcıyı Sil"
+                            onClick={() => handleDelete(profile.id)}
+                            disabled={deletingId === profile.id}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {deletingId === profile.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
